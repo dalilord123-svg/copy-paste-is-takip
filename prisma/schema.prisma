@@ -20,35 +20,80 @@ enum JobStatus {
 
 model Customer {
   id        String   @id @default(cuid())
+
   company   String
+
   contact   String?
+
   phone     String?
+
   email     String?
+
   address   String?
 
   jobs      Job[]
 
   createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
 }
 
 model Job {
-  id          String    @id @default(cuid())
-  jobNo       String    @unique
-  title        String
-  description String?
+  id            String      @id @default(cuid())
 
-  status      JobStatus @default(BEKLIYOR)
+  jobNo         String      @unique
 
-  width       Float?
-  height      Float?
-  quantity    Int?
-  material    String?
-  machine     String?
+  title         String
 
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  description   String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  width         Float?
+
+  height        Float?
+
+  quantity      Int?
+
+  material      String?
+
+  machine       String?
+
+  deliveryDate  DateTime?
+
+  status        JobStatus   @default(BEKLIYOR)
+
+  customerId    String
+
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  files         JobFile[]
+
+  // ==========================
+  // ARŞİV
+  // ==========================
+
+  isArchived    Boolean      @default(false)
+
+  createdAt     DateTime     @default(now())
+
+  updatedAt     DateTime     @updatedAt
+}
+
+model JobFile {
+  id            String   @id @default(cuid())
+
+  fileName      String
+
+  originalName  String
+
+  fileType      String
+
+  fileSize      Int
+
+  filePath      String
+
+  jobId         String
+
+  job           Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  uploadedAt    DateTime @default(now())
 }
