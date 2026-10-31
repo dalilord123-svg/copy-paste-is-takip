@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { JobStatus } from "@/app/generated/prisma/enums";
+import { prisma } from "@/lib/prisma";
+import { ProductionStepStatus } from "@prisma/client";
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = await params;
 
     const body = await request.json();
 
-    const status = body.status as JobStatus;
+    const stepId = body.stepId as string | undefined;
 
-    if (!status) {
+    const status = body.status as ProductionStepStatus | undefined;
+
+    if (!stepId || !status) {
       return NextResponse.json(
         {
-          error: "Durum belirtilmedi.",
+          error: "stepId ve status zorunludur.",
         },
         {
           status: 400,
@@ -24,43 +32,51 @@ export async function PATCH(
       );
     }
 
-    const job = await prisma.job.findUnique({
+    const step = await prisma.productionStep.update({
       where: {
-        id,
+        id: stepId,
       },
-    });
 
-    if (!job) {
-      return NextResponse.json(
-        {
-          error: "İş bulunamadı.",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    const updatedJob = await prisma.job.update({
-      where: {
-        id,
-      },
       data: {
         status,
+
+        startedAt:
+          status === ProductionStepStatus.DEVAM_EDIYOR
+            ? new Date()
+            : undefined,
+
+        finishedAt:
+          status === ProductionStepStatus.TAMAMLANDI
+            ? new Date()
+            : undefined,
+      },
+
+      include: {
+        station: true,
+        employee: true,
+        job: true,
       },
     });
 
-    return NextResponse.json(updatedJob);
+    await prisma.jobHistory.create({
+      data: {
+        jobId: step.jobId,
+
+        employeeId: step.employeeId,
+
+        action: "STATUS_CHANGED",
+
+        description: `${step.station.name} → ${status}`,
+      },
+    });
+
+    return NextResponse.json(step);
   } catch (error) {
-    console.error("STATUS UPDATE ERROR");
     console.error(error);
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Durum güncellenemedi.",
+        error: "Durum güncellenemedi.",
       },
       {
         status: 500,

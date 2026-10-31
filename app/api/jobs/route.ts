@@ -1,24 +1,43 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../lib/prisma";
+import { prisma } from "@/lib/prisma";
+import { JobPriority } from "@prisma/client";
 
 function generateJobNo() {
   const now = new Date();
 
-  const year = now.getFullYear().toString().slice(-2);
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+  const y = now.getFullYear();
 
-  const random = Math.floor(Math.random() * 9000) + 1000;
+  const m = String(now.getMonth() + 1).padStart(2, "0");
 
-  return `JOB-${year}${month}${day}-${random}`;
+  const d = String(now.getDate()).padStart(2, "0");
+
+  const h = String(now.getHours()).padStart(2, "0");
+
+  const min = String(now.getMinutes()).padStart(2, "0");
+
+  return `JOB-${y}${m}${d}-${h}${min}`;
 }
 
 export async function GET() {
   try {
     const jobs = await prisma.job.findMany({
+      where: {
+        isArchived: false,
+      },
+
       include: {
         customer: true,
+        productionSteps: {
+          include: {
+            station: true,
+            employee: true,
+          },
+          orderBy: {
+            stepOrder: "asc",
+          },
+        },
       },
+
       orderBy: {
         createdAt: "desc",
       },
@@ -30,7 +49,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: "İşler alınamadı.",
+        error: "İşler getirilemedi.",
       },
       {
         status: 500,
@@ -43,24 +62,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    if (!body.title || !body.customerId) {
-      return NextResponse.json(
-        {
-          error: "İş adı ve müşteri zorunludur.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
     const job = await prisma.job.create({
       data: {
         jobNo: generateJobNo(),
 
         title: body.title,
 
-        description: body.description || null,
+        description: body.description ?? null,
 
         width: body.width ? Number(body.width) : null,
 
@@ -68,17 +76,23 @@ export async function POST(request: Request) {
 
         quantity: body.quantity ? Number(body.quantity) : null,
 
-        material: body.material || null,
+        material: body.material ?? null,
 
-        machine: body.machine || null,
+        machine: body.machine ?? null,
 
         deliveryDate: body.deliveryDate
           ? new Date(body.deliveryDate)
           : null,
 
-        customerId: body.customerId,
+        priority:
+          (body.priority as JobPriority) ??
+          JobPriority.NORMAL,
 
-        status: "BEKLIYOR",
+        customer: {
+          connect: {
+            id: body.customerId,
+          },
+        },
       },
 
       include: {
@@ -86,9 +100,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(job, {
-      status: 201,
-    });
+    return NextResponse.json(job);
   } catch (error) {
     console.error(error);
 

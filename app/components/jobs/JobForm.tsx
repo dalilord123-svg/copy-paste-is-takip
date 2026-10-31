@@ -4,10 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import CustomerSelect from "./CustomerSelect";
 
-export default function JobForm() {
+type Props = {
+  defaultCustomerId?: string;
+};
+
+export default function JobForm({
+  defaultCustomerId,
+}: Props) {
   const router = useRouter();
 
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(
+    defaultCustomerId ?? ""
+  );
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
@@ -192,7 +201,9 @@ export default function JobForm() {
         disabled={loading}
         className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-8 py-3 rounded-lg"
       >
-        {loading ? "Kaydediliyor..." : "İşi Kaydet"}
+        {loading
+          ? "Kaydediliyor..."
+          : "İşi Kaydet"}
       </button>
 
     </form>

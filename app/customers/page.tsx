@@ -23,9 +23,11 @@ export default function CustomersPage() {
     try {
       const res = await fetch("/api/customers");
       const data = await res.json();
+
       setCustomers(data);
     } catch (err) {
       console.error(err);
+
       alert("Müşteriler yüklenemedi.");
     } finally {
       setLoading(false);
@@ -34,13 +36,19 @@ export default function CustomersPage() {
 
   return (
     <main className="max-w-7xl mx-auto p-8">
+
       <div className="flex items-center justify-between mb-8">
+
         <div>
-          <h1 className="text-4xl font-bold">Müşteriler</h1>
+
+          <h1 className="text-4xl font-bold">
+            Müşteriler
+          </h1>
 
           <p className="text-gray-500 mt-2">
             Toplam {customers.length} müşteri
           </p>
+
         </div>
 
         <Link
@@ -49,42 +57,103 @@ export default function CustomersPage() {
         >
           + Yeni Müşteri
         </Link>
+
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
+
         {loading ? (
-          <div className="p-8">Yükleniyor...</div>
+
+          <div className="p-8">
+            Yükleniyor...
+          </div>
+
         ) : customers.length === 0 ? (
+
           <div className="p-8 text-gray-500">
             Sistemde kayıtlı müşteri bulunmuyor.
           </div>
+
         ) : (
+
           <table className="w-full">
+
             <thead className="bg-gray-100">
+
               <tr>
-                <th className="text-left p-4">Firma</th>
-                <th className="text-left p-4">Yetkili</th>
-                <th className="text-left p-4">Telefon</th>
-                <th className="text-left p-4">E-posta</th>
+
+                <th className="text-left p-4">
+                  Firma
+                </th>
+
+                <th className="text-left p-4">
+                  Yetkili
+                </th>
+
+                <th className="text-left p-4">
+                  Telefon
+                </th>
+
+                <th className="text-left p-4">
+                  E-Posta
+                </th>
+
+                <th className="text-right p-4">
+                  İşlem
+                </th>
+
               </tr>
+
             </thead>
 
             <tbody>
+
               {customers.map((customer) => (
+
                 <tr
                   key={customer.id}
                   className="border-t hover:bg-gray-50"
                 >
-                  <td className="p-4 font-semibold">{customer.company}</td>
-                  <td className="p-4">{customer.contact || "-"}</td>
-                  <td className="p-4">{customer.phone || "-"}</td>
-                  <td className="p-4">{customer.email || "-"}</td>
+
+                  <td className="p-4 font-semibold">
+                    {customer.company}
+                  </td>
+
+                  <td className="p-4">
+                    {customer.contact || "-"}
+                  </td>
+
+                  <td className="p-4">
+                    {customer.phone || "-"}
+                  </td>
+
+                  <td className="p-4">
+                    {customer.email || "-"}
+                  </td>
+
+                  <td className="p-4 text-right">
+
+                    <Link
+                      href={`/customers/${customer.id}`}
+                      className="text-blue-600 hover:underline font-medium"
+                    >
+                      Görüntüle
+                    </Link>
+
+                  </td>
+
                 </tr>
+
               ))}
+
             </tbody>
+
           </table>
+
         )}
+
       </div>
+
     </main>
   );
 }

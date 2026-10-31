@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 import JobEditForm from "../../../components/jobs/JobEditForm";
 

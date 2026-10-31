@@ -1,46 +1,58 @@
+import { ProductionStepStatus } from "@prisma/client";
+
 type Props = {
-  status: string;
+  status: ProductionStepStatus;
 };
 
 export default function JobStatusBadge({ status }: Props) {
-  let color =
-    "bg-gray-100 text-gray-800";
-
   switch (status) {
-    case "BEKLIYOR":
-      color = "bg-yellow-100 text-yellow-800";
-      break;
+    case ProductionStepStatus.BEKLIYOR:
+      return (
+        <span className="px-3 py-1 rounded-full bg-gray-200 text-gray-700 text-sm font-medium">
+          Bekliyor
+        </span>
+      );
 
-    case "TASARIM":
-      color = "bg-blue-100 text-blue-800";
-      break;
+    case ProductionStepStatus.HAZIR:
+      return (
+        <span className="px-3 py-1 rounded-full bg-blue-200 text-blue-800 text-sm font-medium">
+          Hazır
+        </span>
+      );
 
-    case "BASKI":
-      color = "bg-purple-100 text-purple-800";
-      break;
+    case ProductionStepStatus.DEVAM_EDIYOR:
+      return (
+        <span className="px-3 py-1 rounded-full bg-yellow-200 text-yellow-800 text-sm font-medium">
+          Devam Ediyor
+        </span>
+      );
 
-    case "KESIM":
-      color = "bg-orange-100 text-orange-800";
-      break;
+    case ProductionStepStatus.BEKLEMEDE:
+      return (
+        <span className="px-3 py-1 rounded-full bg-orange-200 text-orange-800 text-sm font-medium">
+          Beklemede
+        </span>
+      );
 
-    case "MONTAJ":
-      color = "bg-cyan-100 text-cyan-800";
-      break;
+    case ProductionStepStatus.TAMAMLANDI:
+      return (
+        <span className="px-3 py-1 rounded-full bg-green-200 text-green-800 text-sm font-medium">
+          Tamamlandı
+        </span>
+      );
 
-    case "TAMAMLANDI":
-      color = "bg-green-100 text-green-800";
-      break;
+    case ProductionStepStatus.IPTAL:
+      return (
+        <span className="px-3 py-1 rounded-full bg-red-200 text-red-800 text-sm font-medium">
+          İptal
+        </span>
+      );
 
-    case "TESLIM":
-      color = "bg-emerald-600 text-white";
-      break;
+    default:
+      return (
+        <span className="px-3 py-1 rounded-full bg-gray-200 text-gray-700 text-sm font-medium">
+          Bilinmiyor
+        </span>
+      );
   }
-
-  return (
-    <span
-      className={`px-3 py-1 rounded-full text-sm font-semibold ${color}`}
-    >
-      {status}
-    </span>
-  );
 }

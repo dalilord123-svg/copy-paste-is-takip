@@ -1,13 +1,24 @@
 import Link from "next/link";
 import JobForm from "../../components/jobs/JobForm";
 
-export default function NewJobPage() {
+type Props = {
+  searchParams: Promise<{
+    customer?: string;
+  }>;
+};
+
+export default async function NewJobPage({
+  searchParams,
+}: Props) {
+  const { customer } = await searchParams;
+
   return (
     <main className="max-w-5xl mx-auto p-8">
 
       <div className="flex items-center justify-between mb-8">
 
         <div>
+
           <h1 className="text-4xl font-bold">
             Yeni İş
           </h1>
@@ -15,6 +26,7 @@ export default function NewJobPage() {
           <p className="text-gray-500 mt-2">
             Yeni üretim işi oluştur.
           </p>
+
         </div>
 
         <Link
@@ -28,7 +40,9 @@ export default function NewJobPage() {
 
       <div className="bg-white rounded-xl shadow p-8">
 
-        <JobForm />
+        <JobForm
+          defaultCustomerId={customer}
+        />
 
       </div>
 

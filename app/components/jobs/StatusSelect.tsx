@@ -1,97 +1,73 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-
-const statuses = [
-  "BEKLIYOR",
-  "TASARIM",
-  "BASKI",
-  "KESIM",
-  "MONTAJ",
-  "TAMAMLANDI",
-  "TESLIM",
-];
+import { ProductionStepStatus } from "@prisma/client";
 
 type Props = {
   jobId: string;
-  currentStatus: string;
+  stepId: string;
+  currentStatus: ProductionStepStatus;
 };
+
+const statuses: ProductionStepStatus[] = [
+  "BEKLIYOR",
+  "HAZIR",
+  "DEVAM_EDIYOR",
+  "BEKLEMEDE",
+  "TAMAMLANDI",
+  "IPTAL",
+];
 
 export default function StatusSelect({
   jobId,
+  stepId,
   currentStatus,
 }: Props) {
-  const router = useRouter();
+  const [status, setStatus] =
+    useState<ProductionStepStatus>(currentStatus);
 
-  const [status, setStatus] = useState(currentStatus);
   const [loading, setLoading] = useState(false);
 
-  async function saveStatus() {
+  async function updateStatus(
+    newStatus: ProductionStepStatus
+  ) {
+    setStatus(newStatus);
+    setLoading(true);
+
     try {
-      setLoading(true);
+      await fetch(`/api/jobs/${jobId}/status`, {
+        method: "PATCH",
 
-      const res = await fetch(
-        `/api/jobs/${jobId}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            status,
-          }),
-        }
-      );
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-      if (!res.ok) {
-        throw new Error();
-      }
-
-      alert("Durum güncellendi.");
-
-      router.refresh();
-    } catch {
-      alert("Durum güncellenemedi.");
+        body: JSON.stringify({
+          stepId,
+          status: newStatus,
+        }),
+      });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="border rounded-xl p-6 bg-white">
-
-      <h2 className="text-xl font-bold mb-4">
-        İş Durumu
-      </h2>
-
-      <div className="flex gap-4">
-
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="border rounded-lg p-3 flex-1"
-        >
-          {statuses.map((item) => (
-            <option
-              key={item}
-              value={item}
-            >
-              {item}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={saveStatus}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-lg disabled:bg-gray-400"
-        >
-          {loading ? "Kaydediliyor..." : "Kaydet"}
-        </button>
-
-      </div>
-
-    </div>
+    <select
+      value={status}
+      disabled={loading}
+      onChange={(e) =>
+        updateStatus(
+          e.target.value as ProductionStepStatus
+        )
+      }
+      className="border rounded-lg px-3 py-2"
+    >
+      {statuses.map((item) => (
+        <option key={item} value={item}>
+          {item}
+        </option>
+      ))}
+    </select>
   );
 }
