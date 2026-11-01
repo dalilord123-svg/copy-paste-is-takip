@@ -8,10 +8,6 @@ type RouteContext = {
   }>;
 };
 
-// ======================
-// GET
-// ======================
-
 export async function GET(
   request: Request,
   { params }: RouteContext
@@ -23,11 +19,20 @@ export async function GET(
       where: {
         id,
       },
-
       include: {
         customer: true,
 
-        files: true,
+        files: {
+          orderBy: {
+            uploadedAt: "desc",
+          },
+        },
+
+        photos: {
+          orderBy: {
+            uploadedAt: "desc",
+          },
+        },
 
         notes: {
           include: {
@@ -36,18 +41,7 @@ export async function GET(
           orderBy: {
             createdAt: "desc",
           },
-        },
-
-        photos: {
-          include: {
-            employee: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-
-        history: {
+        },        history: {
           include: {
             employee: true,
           },
@@ -94,15 +88,10 @@ export async function GET(
   }
 }
 
-// ======================
-// PUT
-// ======================
-
 export async function PUT(
   request: Request,
   { params }: RouteContext
-) {
-  try {
+) {  try {
     const { id } = await params;
 
     const body = await request.json();
@@ -114,19 +103,14 @@ export async function PUT(
 
       data: {
         customerId: body.customerId,
-
         title: body.title,
-
         description: body.description ?? null,
 
         width: body.width ? Number(body.width) : null,
-
         height: body.height ? Number(body.height) : null,
-
         quantity: body.quantity ? Number(body.quantity) : null,
 
         material: body.material ?? null,
-
         machine: body.machine ?? null,
 
         deliveryDate: body.deliveryDate
@@ -150,6 +134,34 @@ export async function PUT(
             stepOrder: "asc",
           },
         },
+
+        files: {
+          orderBy: {
+            uploadedAt: "desc",
+          },
+        },
+
+        photos: {
+          orderBy: {
+            uploadedAt: "desc",
+          },
+        },        notes: {
+          include: {
+            employee: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+
+        history: {
+          include: {
+            employee: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
       },
     });
 
@@ -167,10 +179,6 @@ export async function PUT(
     );
   }
 }
-
-// ======================
-// DELETE
-// ======================
 
 export async function DELETE(
   request: Request,

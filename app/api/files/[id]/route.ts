@@ -1,112 +1,155 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
 import fs from "fs/promises";
+import path from "path";
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params;
-
-    const file = await prisma.jobFile.findUnique({
-      where: { id },
-    });
-
-    if (!file) {
-      return NextResponse.json(
-        { error: "Dosya bulunamadı." },
-        { status: 404 }
-      );
-    }
-
-    const buffer = await fs.readFile(file.filePath);
-
-    return new NextResponse(buffer, {
-      headers: {
-        "Content-Type":
-          file.fileType || "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(
-          file.originalName
-        )}"`,
-      },
-    });
-  } catch (error) {
-    console.error("GET FILE ERROR");
-    console.error(error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error),
-      },
-      {
-        status: 500,
-      }
-    );
-  }
-}
+type Props = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: Props
 ) {
+
   try {
-    const { id } = await context.params;
 
-    console.log("DELETE FILE ID:", id);
+    const { id } = await params;
 
-    const file = await prisma.jobFile.findUnique({
-      where: { id },
-    });
+    const file =
+      await prisma.jobFile.findUnique({
+
+        where: {
+          id,
+        },
+
+      });
 
     if (!file) {
+
       return NextResponse.json(
+
         {
-          error: "Dosya veritabanında bulunamadı.",
+
+          success: false,
+
+          error:
+            "Dosya bulunamadı.",
+
         },
+
         {
+
           status: 404,
+
         }
+
       );
+
     }
 
-    console.log("FILE:", file);
+    const physicalPath =
+      path.join(
 
-    try {
-      await fs.unlink(file.filePath);
-      console.log("Diskten silindi.");
-    } catch (err) {
-      console.error("unlink hatası:", err);
+        process.cwd(),
+
+        "public",
+
+        file.filePath
+
+      );    try {
+
+      await fs.access(physicalPath);
+
+      await fs.unlink(physicalPath);
+
+    } catch (error) {
+
+      console.warn(
+        "Fiziksel dosya bulunamadı:",
+        physicalPath
+      );
+
     }
 
     await prisma.jobFile.delete({
+
       where: {
+
         id,
+
       },
-    });
 
-    console.log("Veritabanından silindi.");
-
-    return NextResponse.json({
-      success: true,
     });
-  } catch (error) {
-    console.error("DELETE FILE ERROR");
-    console.error(error);
 
     return NextResponse.json(
+
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error),
+
+        success: true,
+
+        message:
+          "Dosya başarıyla silindi.",
+
       },
+
       {
-        status: 500,
+
+        status: 200,
+
       }
+
+    );  } catch (error) {
+
+    console.error(
+      "FILE DELETE ERROR:",
+      error
     );
+
+    if (error instanceof Error) {
+
+      return NextResponse.json(
+
+        {
+
+          success: false,
+
+          error: error.message,
+
+        },
+
+        {
+
+          status: 500,
+
+        }
+
+      );
+
+    }
+
+    return NextResponse.json(
+
+      {
+
+        success: false,
+
+        error:
+          "Beklenmeyen bir hata oluştu.",
+
+      },
+
+      {
+
+        status: 500,
+
+      }
+
+    );
+
   }
+
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import CustomerSelect from "./CustomerSelect";
 
 type Props = {
-  jobId: string;
+  job: any;
 };
 
 const statuses = [
@@ -18,138 +18,56 @@ const statuses = [
   "TESLIM",
 ];
 
-export default function JobEditForm({
-  jobId,
-}: Props) {
+export default function JobEditForm({ job }: Props) {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [customerId, setCustomerId] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [customerId, setCustomerId] = useState(job.customerId ?? "");
+  const [title, setTitle] = useState(job.title ?? "");
+  const [description, setDescription] = useState(job.description ?? "");
+  const [width, setWidth] = useState(job.width ? String(job.width) : "");
+  const [height, setHeight] = useState(job.height ? String(job.height) : "");
+  const [quantity, setQuantity] = useState(job.quantity ? String(job.quantity) : "");
+  const [material, setMaterial] = useState(job.material ?? "");
+  const [machine, setMachine] = useState(job.machine ?? "");
+  const [deliveryDate, setDeliveryDate] = useState(
+    job.deliveryDate
+      ? new Date(job.deliveryDate).toISOString().split("T")[0]
+      : ""
+  );
+  const [status, setStatus] = useState(job.status ?? "BEKLIYOR");
 
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
-  const [quantity, setQuantity] = useState("");
-
-  const [material, setMaterial] = useState("");
-  const [machine, setMachine] = useState("");
-
-  const [deliveryDate, setDeliveryDate] =
-    useState("");
-
-  const [status, setStatus] =
-    useState("BEKLIYOR");
-
-  useEffect(() => {
-    loadJob();
-  }, []);
-
-  async function loadJob() {
-    try {
-      const res = await fetch(
-        `/api/jobs/${jobId}`
-      );
-
-      if (!res.ok) {
-        throw new Error();
-      }
-
-      const job = await res.json();
-
-      setCustomerId(job.customerId);
-
-      setTitle(job.title);
-
-      setDescription(job.description || "");
-
-      setWidth(
-        job.width ? String(job.width) : ""
-      );
-
-      setHeight(
-        job.height ? String(job.height) : ""
-      );
-
-      setQuantity(
-        job.quantity
-          ? String(job.quantity)
-          : ""
-      );
-
-      setMaterial(job.material || "");
-
-      setMachine(job.machine || "");
-
-      setStatus(job.status);
-
-      if (job.deliveryDate) {
-        setDeliveryDate(
-          new Date(job.deliveryDate)
-            .toISOString()
-            .split("T")[0]
-        );
-      }
-    } catch {
-      alert("İş yüklenemedi.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function saveJob(
-    e: React.FormEvent
-  ) {
+  async function saveJob(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!customerId) {
-      alert("Müşteri seçiniz.");
-      return;
-    }
-
-    if (!title.trim()) {
-      alert("İş adı zorunludur.");
-      return;
-    }
+    setSaving(true);
 
     try {
-      setSaving(true);
-
-      const res = await fetch(
-        `/api/jobs/${jobId}`,
-        {
-          method: "PUT",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            customerId,
-            title,
-            description,
-            width,
-            height,
-            quantity,
-            material,
-            machine,
-            deliveryDate,
-            status,
-          }),
-        }
-      );
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerId,
+          title,
+          description,
+          width,
+          height,
+          quantity,
+          material,
+          machine,
+          deliveryDate,
+          status,
+        }),
+      });
 
       if (!res.ok) {
         throw new Error();
       }
 
-      alert("İş güncellendi.");
-
-      router.push(`/jobs/${jobId}`);
-
+      router.push(`/jobs/${job.id}`);
       router.refresh();
     } catch {
       alert("İş güncellenemedi.");
@@ -158,19 +76,8 @@ export default function JobEditForm({
     }
   }
 
-  if (loading) {
-    return (
-      <div className="text-center py-20">
-        Yükleniyor...
-      </div>
-    );
-  }
-
   return (
-    <form
-      onSubmit={saveJob}
-      className="space-y-6"
-    >
+    <form onSubmit={saveJob} className="space-y-6">
       <CustomerSelect
         value={customerId}
         onChange={setCustomerId}
@@ -183,9 +90,7 @@ export default function JobEditForm({
 
         <input
           value={title}
-          onChange={(e) =>
-            setTitle(e.target.value)
-          }
+          onChange={(e) => setTitle(e.target.value)}
           className="w-full border rounded-lg p-3"
         />
       </div>
@@ -198,164 +103,86 @@ export default function JobEditForm({
         <textarea
           rows={4}
           value={description}
-          onChange={(e) =>
-            setDescription(
-              e.target.value
-            )
-          }
+          onChange={(e) => setDescription(e.target.value)}
           className="w-full border rounded-lg p-3"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block mb-2">
-            En (cm)
-          </label>
-
-          <input
-            value={width}
-            onChange={(e) =>
-              setWidth(e.target.value)
-            }
-            className="w-full border rounded-lg p-3"
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2">
-            Boy (cm)
-          </label>
-
-          <input
-            value={height}
-            onChange={(e) =>
-              setHeight(e.target.value)
-            }
-            className="w-full border rounded-lg p-3"
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2">
-            Adet
-          </label>
-
-          <input
-            value={quantity}
-            onChange={(e) =>
-              setQuantity(
-                e.target.value
-              )
-            }
-            className="w-full border rounded-lg p-3"
-          />
-        </div>
-      </div>
-            <div className="grid grid-cols-2 gap-4">
-
-        <div>
-          <label className="block mb-2">
-            Malzeme
-          </label>
-
-          <input
-            value={material}
-            onChange={(e) =>
-              setMaterial(e.target.value)
-            }
-            className="w-full border rounded-lg p-3"
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2">
-            Makine
-          </label>
-
-          <input
-            value={machine}
-            onChange={(e) =>
-              setMachine(e.target.value)
-            }
-            className="w-full border rounded-lg p-3"
-          />
-        </div>
-
-      </div>
-
-      <div>
-
-        <label className="block mb-2">
-          Teslim Tarihi
-        </label>
-
         <input
-          type="date"
-          value={deliveryDate}
-          onChange={(e) =>
-            setDeliveryDate(
-              e.target.value
-            )
-          }
-          className="w-full border rounded-lg p-3"
+          placeholder="En"
+          value={width}
+          onChange={(e) => setWidth(e.target.value)}
+          className="border rounded-lg p-3"
         />
 
+        <input
+          placeholder="Boy"
+          value={height}
+          onChange={(e) => setHeight(e.target.value)}
+          className="border rounded-lg p-3"
+        />
+
+        <input
+          placeholder="Adet"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          className="border rounded-lg p-3"
+        />
       </div>
 
-      <div>
+      <div className="grid grid-cols-2 gap-4">
+        <input
+          placeholder="Malzeme"
+          value={material}
+          onChange={(e) => setMaterial(e.target.value)}
+          className="border rounded-lg p-3"
+        />
 
-        <label className="block mb-2 font-semibold">
-          Durum
-        </label>
-
-        <select
-          value={status}
-          onChange={(e) =>
-            setStatus(e.target.value)
-          }
-          className="w-full border rounded-lg p-3"
-        >
-
-          {statuses.map((item) => (
-
-            <option
-              key={item}
-              value={item}
-            >
-              {item}
-            </option>
-
-          ))}
-
-        </select>
-
+        <input
+          placeholder="Makine"
+          value={machine}
+          onChange={(e) => setMachine(e.target.value)}
+          className="border rounded-lg p-3"
+        />
       </div>
+
+      <input
+        type="date"
+        value={deliveryDate}
+        onChange={(e) => setDeliveryDate(e.target.value)}
+        className="w-full border rounded-lg p-3"
+      />
+
+      <select
+        value={status}
+        onChange={(e) => setStatus(e.target.value)}
+        className="w-full border rounded-lg p-3"
+      >
+        {statuses.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
 
       <div className="flex gap-4">
-
         <button
           type="submit"
           disabled={saving}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-8 py-3 rounded-lg"
+          className="bg-green-600 text-white px-8 py-3 rounded-lg"
         >
-          {saving
-            ? "Kaydediliyor..."
-            : "Güncelle"}
+          {saving ? "Kaydediliyor..." : "Güncelle"}
         </button>
 
         <button
           type="button"
-          onClick={() =>
-            router.push(`/jobs/${jobId}`)
-          }
-          className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg"
+          onClick={() => router.push(`/jobs/${job.id}`)}
+          className="bg-gray-500 text-white px-8 py-3 rounded-lg"
         >
           Vazgeç
         </button>
-
       </div>
-
     </form>
   );
 }

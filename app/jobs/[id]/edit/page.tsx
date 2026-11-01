@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
-
 import { prisma } from "@/lib/prisma";
 
-import JobEditForm from "../../../components/jobs/JobEditForm";
+import JobEditForm from "@/app/components/jobs/JobEditForm";
 
 type Props = {
   params: Promise<{
@@ -19,6 +18,9 @@ export default async function EditJobPage({
     where: {
       id,
     },
+    include: {
+      customer: true,
+    },
   });
 
   if (!job) {
@@ -27,15 +29,11 @@ export default async function EditJobPage({
 
   return (
     <main className="max-w-5xl mx-auto p-8">
-
       <h1 className="text-4xl font-bold mb-8">
         İşi Düzenle
       </h1>
 
-      <JobEditForm
-        jobId={job.id}
-      />
-
+      <JobEditForm job={job} />
     </main>
   );
 }

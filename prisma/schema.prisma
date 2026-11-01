@@ -1,9 +1,228 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  company   String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  jobs      Job[]
+
+  @@index([company])
+}
+
+model Employee {
+  id              String           @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  role            EmployeeRole     @default(URETIM)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  JobHistory      JobHistory[]
+  JobNote         JobNote[]
+  JobPhoto        JobPhoto[]
+  productionSteps ProductionStep[]
+
+  @@index([name])
+  @@index([role])
+  @@index([isActive])
+}
+
+model Station {
+  id String @id @default(cuid())
+
+  name String @unique
+
+  icon String?
+
+  color String?
+
+  sortOrder Int @default(0)
+
+  isActive Boolean @default(true)
+
+  requirePhotoCount Int @default(0)
+
+  requireFile Boolean @default(false)
+
+  requireNote Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  productionSteps ProductionStep[]
+
+  templateSteps TemplateStep[]
+
+  @@index([sortOrder])
+  @@index([isActive])
+}
+
+model Job {
+  id           String      @id @default(cuid())
+  jobNo        String      @unique
+  title        String
+  description  String?
+  width        Float?
+  height       Float?
+  quantity     Int?
+  material     String?
+  machine      String?
+  deliveryDate DateTime?
+  priority     JobPriority @default(NORMAL)
+  status       JobStatus   @default(BEKLIYOR)
+  customerId   String
+  isArchived   Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  productionSteps ProductionStep[]
+  files           JobFile[]
+  photos          JobPhoto[]
+  notes           JobNote[]
+  history         JobHistory[]
+
+  @@index([customerId])
+  @@index([priority])
+  @@index([deliveryDate])
+  @@index([isArchived])
+}
+
+model JobFile {
+  id           String       @id @default(cuid())
+  jobId        String
+  category     FileCategory @default(DIGER)
+  originalName String
+  fileName     String
+  filePath     String
+  fileType     String
+  fileSize     Int
+  uploadedAt   DateTime     @default(now())
+  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([category])
+}
+
+model ProductionStep {
+  id               String               @id @default(cuid())
+  jobId            String
+  stationId        String
+  employeeId       String?
+  stepOrder        Int
+  status           ProductionStepStatus @default(BEKLIYOR)
+  waitingReason    WaitingReason?
+  waitingNote      String?
+  estimatedMinutes Int?
+  actualMinutes    Int?
+  progress         Int                  @default(0)
+  photoCount       Int                  @default(0)
+  fileCount        Int                  @default(0)
+  noteCount        Int                  @default(0)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  employee         Employee?            @relation(fields: [employeeId], references: [id])
+  job              Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  station          Station              @relation(fields: [stationId], references: [id])
+
+  @@index([jobId])
+  @@index([stationId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([stepOrder])
+}
+
+model Template {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  steps       TemplateStep[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model TemplateStep {
+  id                String   @id @default(cuid())
+  templateId        String
+  stationId         String
+  stepOrder         Int
+  estimatedMinutes  Int      @default(0)
+  requirePhotoCount Int      @default(0)
+  requireFile       Boolean  @default(false)
+  requireNote       Boolean  @default(false)
+  station           Station  @relation(fields: [stationId], references: [id])
+  template          Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, stepOrder])
+  @@index([templateId])
+  @@index([stationId])
+}
+
+model JobNote {
+  id         String    @id @default(cuid())
+  jobId      String
+  employeeId String?
+  note       String
+  createdAt  DateTime  @default(now())
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model JobPhoto {
+  id String @id @default(cuid())
+
+  jobId      String
+  employeeId String?
+
+  originalName String
+  fileName     String
+  filePath     String
+  fileType     String
+  fileSize     Int
+
+  uploadedAt DateTime @default(now())
+
+  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id])
+
+  @@index([jobId])
+  @@index([employeeId])
+}
+
+model JobHistory {
+  id          String    @id @default(cuid())
+  jobId       String
+  employeeId  String?
+  action      String
+  description String?
+  createdAt   DateTime  @default(now())
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
 }
 
 enum JobStatus {
@@ -32,320 +251,6 @@ enum WaitingReason {
   DIGER
 }
 
-model Customer {
-  id String @id @default(cuid())
-
-  company String
-  contact String?
-  phone   String?
-  email   String?
-  address String?
-
-  jobs Job[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([company])
-}
-
-model Employee {
-  id String @id @default(cuid())
-
-  name  String
-  phone String?
-  email String?
-
-  role EmployeeRole @default(URETIM)
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  productionSteps ProductionStep[]
-  JobNote         JobNote[]
-  JobPhoto        JobPhoto[]
-  JobHistory      JobHistory[]
-
-  @@index([name])
-  @@index([role])
-  @@index([isActive])
-}
-
-model Station {
-  id String @id @default(cuid())
-
-  name  String
-  icon  String?
-  color String?
-
-  sortOrder Int @default(0)
-
-  isActive Boolean @default(true)
-
-  requirePhotoCount Int @default(0)
-
-  requireFile Boolean @default(false)
-
-  requireNote Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  productionSteps ProductionStep[]
-
-  templateSteps TemplateStep[]
-
-  @@index([sortOrder])
-  @@index([isActive])
-}
-
-model Job {
-  id String @id @default(cuid())
-
-  jobNo String @unique
-
-  title String
-
-  description String?
-
-  width Float?
-
-  height Float?
-
-  quantity Int?
-
-  material String?
-
-  machine String?
-
-  deliveryDate DateTime?
-
-  priority JobPriority @default(NORMAL)
-
-  customerId String
-
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  productionSteps ProductionStep[]
-
-  files JobFile[]
-
-  notes JobNote[]
-
-  photos JobPhoto[]
-
-  history JobHistory[]
-
-  isArchived Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-
-  @@index([customerId])
-  @@index([priority])
-  @@index([deliveryDate])
-  @@index([isArchived])
-}
-
-model JobFile {
-  id String @id @default(cuid())
-
-  jobId String
-
-  category FileCategory @default(DIGER)
-
-  originalName String
-
-  fileName String
-
-  filePath String
-
-  fileType String
-
-  fileSize Int
-
-  uploadedAt DateTime @default(now())
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@index([jobId])
-  @@index([category])
-}
-
-model ProductionStep {
-  id String @id @default(cuid())
-
-  jobId String
-
-  stationId String
-
-  employeeId String?
-
-  stepOrder Int
-
-  status ProductionStepStatus @default(BEKLIYOR)
-
-  waitingReason WaitingReason?
-
-  waitingNote String?
-
-  estimatedMinutes Int?
-
-  actualMinutes Int?
-
-  progress Int @default(0)
-
-  photoCount Int @default(0)
-
-  fileCount Int @default(0)
-
-  noteCount Int @default(0)
-
-  startedAt DateTime?
-
-  finishedAt DateTime?
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  station Station @relation(fields: [stationId], references: [id])
-
-  employee Employee? @relation(fields: [employeeId], references: [id])
-
-  @@index([jobId])
-  @@index([stationId])
-  @@index([employeeId])
-  @@index([status])
-  @@index([stepOrder])
-}
-
-model Template {
-  id String @id @default(cuid())
-
-  name String
-
-  description String?
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-
-  steps TemplateStep[]
-
-  @@index([name])
-  @@index([isActive])
-}
-
-model TemplateStep {
-  id String @id @default(cuid())
-
-  templateId String
-
-  stationId String
-
-  stepOrder Int
-
-  estimatedMinutes Int @default(0)
-
-  requirePhotoCount Int @default(0)
-
-  requireFile Boolean @default(false)
-
-  requireNote Boolean @default(false)
-
-  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  station Station @relation(fields: [stationId], references: [id])
-
-  @@unique([templateId, stepOrder])
-  @@index([templateId])
-  @@index([stationId])
-}
-
-model JobNote {
-  id String @id @default(cuid())
-
-  jobId String
-
-  employeeId String?
-
-  note String
-
-  createdAt DateTime @default(now())
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  employee Employee? @relation(fields: [employeeId], references: [id])
-
-  @@index([jobId])
-}
-
-model JobPhoto {
-  id String @id @default(cuid())
-
-  jobId String
-
-  employeeId String?
-
-  originalName String
-
-  fileName String
-
-  filePath String
-
-  createdAt DateTime @default(now())
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  employee Employee? @relation(fields: [employeeId], references: [id])
-
-  @@index([jobId])
-}
-
-model JobHistory {
-  id String @id @default(cuid())
-
-  jobId String
-
-  employeeId String?
-
-  action String
-
-  description String?
-
-  createdAt DateTime @default(now())
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  employee Employee? @relation(fields: [employeeId], references: [id])
-
-  @@index([jobId])
-}
-
-// ============================================
-// ÜRETİM ADIM BAĞIMLILIKLARI
-// ============================================
-
-// ============================================
-// İŞ ETİKETLERİ
-// ============================================
-
-// ============================================
-// İŞ - ETİKET İLİŞKİSİ
-// ============================================
-
-// ============================================
-// DOSYA KATEGORİLERİ
-// ============================================
-
 enum FileCategory {
   TASARIM
   PDF
@@ -355,10 +260,6 @@ enum FileCategory {
   DIGER
 }
 
-// ============================================
-// PERSONEL ROLLERİ
-// ============================================
-
 enum EmployeeRole {
   ADMIN
   YONETICI
@@ -366,10 +267,6 @@ enum EmployeeRole {
   URETIM
   MONTAJ
 }
-
-// ============================================
-// ÖNCELİK
-// ============================================
 
 enum JobPriority {
   DUSUK
