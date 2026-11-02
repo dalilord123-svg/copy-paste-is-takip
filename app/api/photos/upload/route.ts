@@ -3,20 +3,47 @@ import { prisma } from "@/lib/prisma";
 
 import fs from "fs/promises";
 import path from "path";
-import { randomUUID } from "crypto";
+
+import { v4 as uuid } from "uuid";
+
+const MAX_SIZE = 10 * 1024 * 1024;
+
+const ALLOWED = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+];
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
 
-    const jobId = formData.get("jobId") as string;
-    const photos = formData.getAll("photos") as File[];
+    const file = formData.get("file") as File | null;
+
+    const jobId = formData.get("jobId")?.toString();
+
+    const employeeId =
+      formData.get("employeeId")?.toString() || null;
+
+    if (!file) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Fotoğraf bulunamadı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     if (!jobId) {
       return NextResponse.json(
         {
           success: false,
-          error: "Job ID bulunamadı.",
+          error: "Job ID gerekli.",
         },
         {
           status: 400,
@@ -24,11 +51,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (photos.length === 0) {
+    if (!ALLOWED.includes(file.type)) {
       return NextResponse.json(
         {
           success: false,
-          error: "Fotoğraf seçilmedi.",
+          error: "Desteklenmeyen dosya tipi.",
         },
         {
           status: 400,
@@ -36,102 +63,75 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const job = await prisma.job.findUnique({
-      where: {
-        id: jobId,
-      },
-    });
-
-    if (!job) {
+    if (file.size > MAX_SIZE) {
       return NextResponse.json(
         {
           success: false,
-          error: "İş bulunamadı.",
+          error: "10 MB sınırı aşıldı.",
         },
         {
-          status: 404,
+          status: 400,
         }
       );
     }
+
+    const bytes = await file.arrayBuffer();
+
+    const buffer = Buffer.from(bytes);
+
+    const ext = path.extname(file.name);
+
+    const fileName = uuid() + ext;
 
     const uploadDir = path.join(
       process.cwd(),
       "public",
       "uploads",
-      "photos",
-      jobId
+      "jobs"
     );
 
     await fs.mkdir(uploadDir, {
       recursive: true,
     });
 
-    const uploadedPhotos = [];
+    const savePath = path.join(
+      uploadDir,
+      fileName
+    );
 
-    for (const photo of photos) {
-      const bytes = await photo.arrayBuffer();
-      const buffer = Buffer.from(bytes);
+    await fs.writeFile(
+      savePath,
+      buffer
+    );
 
-      const extension = path.extname(photo.name).toLowerCase();
-
-      const fileName = `${randomUUID()}${extension}`;
-
-      const fullPath = path.join(uploadDir, fileName);
-
-      await fs.writeFile(fullPath, buffer);
-
-      const createdPhoto = await prisma.jobPhoto.create({
-        data: {
-          jobId,
-          originalName: photo.name,
-          fileName,
-          filePath: `/uploads/photos/${jobId}/${fileName}`,
-          fileType: photo.type,
-          fileSize: photo.size,
-        },
-      });
-
-      uploadedPhotos.push(createdPhoto);
-    }
-
-    const allPhotos = await prisma.jobPhoto.findMany({
-      where: {
+    const db = await prisma.jobPhoto.create({
+      data: {
         jobId,
-      },
-      orderBy: {
-        uploadedAt: "desc",
+        employeeId,
+
+        originalName: file.name,
+
+        fileName,
+
+        filePath: "/uploads/jobs/" + fileName,
+
+        fileType: file.type,
+
+        fileSize: file.size,
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: `${uploadedPhotos.length} fotoğraf başarıyla yüklendi.`,
-        data: allPhotos,
-      },
-      {
-        status: 201,
-      }
-    );
-  } catch (error) {
-    console.error("PHOTO UPLOAD ERROR:", error);
-
-    if (error instanceof Error) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
+    return NextResponse.json({
+      success: true,
+      photo: db,
+    });
+  } catch (err) {
+    console.error(err);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Beklenmeyen bir hata oluştu.",
+        error: "Upload başarısız.",
       },
       {
         status: 500,

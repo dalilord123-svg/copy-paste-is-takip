@@ -1,43 +1,89 @@
-import { prisma } from "../../../lib/prisma";
+type Props = {
+  data: {
+    totalJobs: number;
+    activeJobs: number;
+    archivedJobs: number;
+    customers: number;
+    employees: number;
+    todayDeliveries: number;
+    overdueJobs: number;
+  };
+};
 
-export default async function DashboardCards() {
-  const [
-    totalJobs,
-    activeJobs,
-    totalCustomers,
-    totalEmployees,
-  ] = await Promise.all([
-    prisma.job.count(),
-    prisma.job.count({
-      where: {
-        isArchived: false,
-      },
-    }),
-    prisma.customer.count(),
-    prisma.employee.count(),
-  ]);
+export default function DashboardCards({
+  data,
+}: Props) {
+  const cards = [
+    {
+      title: "Toplam İş",
+      value: data.totalJobs,
+      color: "bg-blue-500",
+      icon: "📋",
+    },
+    {
+      title: "Aktif İş",
+      value: data.activeJobs,
+      color: "bg-green-500",
+      icon: "🚀",
+    },
+    {
+      title: "Arşiv",
+      value: data.archivedJobs,
+      color: "bg-gray-500",
+      icon: "📦",
+    },
+    {
+      title: "Bugün Teslim",
+      value: data.todayDeliveries,
+      color: "bg-indigo-500",
+      icon: "📅",
+    },
+    {
+      title: "Geciken İş",
+      value: data.overdueJobs,
+      color: "bg-red-500",
+      icon: "⚠️",
+    },
+    {
+      title: "Müşteri",
+      value: data.customers,
+      color: "bg-orange-500",
+      icon: "🏢",
+    },
+    {
+      title: "Personel",
+      value: data.employees,
+      color: "bg-purple-500",
+      icon: "👷",
+    },
+  ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-      <Card title="Toplam İş" value={totalJobs} />
-      <Card title="Aktif İş" value={activeJobs} />
-      <Card title="Müşteri" value={totalCustomers} />
-      <Card title="Personel" value={totalEmployees} />
-    </div>
-  );
-}
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 mt-6">
+      {cards.map((card) => (
+        <div
+          key={card.title}
+          className="bg-white rounded-xl shadow border p-6"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-gray-500 text-sm">
+                {card.title}
+              </div>
 
-function Card({
-  title,
-  value,
-}: {
-  title: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-xl border bg-white p-5 shadow-sm">
-      <p className="text-gray-500">{title}</p>
-      <h2 className="mt-2 text-3xl font-bold">{value}</h2>
+              <div className="text-4xl font-bold mt-2">
+                {card.value}
+              </div>
+            </div>
+
+            <div
+              className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl text-white ${card.color}`}
+            >
+              {card.icon}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

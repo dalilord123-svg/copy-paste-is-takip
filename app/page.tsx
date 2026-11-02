@@ -4,10 +4,18 @@ import DashboardHeader from "./components/dashboard/DashboardHeader";
 import DashboardCards from "./components/dashboard/DashboardCards";
 import QuickActions from "./components/dashboard/QuickActions";
 import ProductionStatus from "./components/dashboard/ProductionStatus";
+import DashboardStatistics from "./components/dashboard/DashboardStatistics";
 import RecentJobs from "./components/dashboard/RecentJobs";
 
-export default function HomePage() {
+import { getDashboardData } from "@/lib/dashboard";
+
+export default async function HomePage() {
+
+  const data =
+    await getDashboardData();
+
   return (
+
     <div className="min-h-screen bg-gray-100 flex">
 
       <Sidebar />
@@ -16,16 +24,20 @@ export default function HomePage() {
 
         <DashboardHeader />
 
-        <DashboardCards />
+        <DashboardCards data={data} />
 
         <QuickActions />
 
-        <ProductionStatus />
+        <ProductionStatus data={data} />
 
-        <RecentJobs />
+        <DashboardStatistics data={data} />
+
+        <RecentJobs jobs={data.recentJobs} />
 
       </main>
 
     </div>
+
   );
+
 }

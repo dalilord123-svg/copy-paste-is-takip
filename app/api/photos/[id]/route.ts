@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
@@ -10,7 +10,7 @@ type Props = {
 };
 
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   { params }: Props
 ) {
   try {
@@ -26,7 +26,6 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          error: "Fotoğraf bulunamadı.",
         },
         {
           status: 404,
@@ -34,17 +33,15 @@ export async function DELETE(
       );
     }
 
-    const physicalPath = path.join(
-      process.cwd(),
-      "public",
-      photo.filePath
-    );
-
     try {
-      await fs.unlink(physicalPath);
-    } catch {
-      console.warn("Fiziksel dosya bulunamadı.");
-    }
+      await fs.unlink(
+        path.join(
+          process.cwd(),
+          "public",
+          photo.filePath
+        )
+      );
+    } catch {}
 
     await prisma.jobPhoto.delete({
       where: {
@@ -52,34 +49,13 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Fotoğraf başarıyla silindi.",
-      },
-      {
-        status: 200,
-      }
-    );
-  } catch (error) {
-    console.error("PHOTO DELETE ERROR:", error);
-
-    if (error instanceof Error) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
+    return NextResponse.json({
+      success: true,
+    });
+  } catch {
     return NextResponse.json(
       {
         success: false,
-        error: "Beklenmeyen bir hata oluştu.",
       },
       {
         status: 500,

@@ -22,80 +22,85 @@ model Customer {
 }
 
 model Employee {
-  id              String           @id @default(cuid())
-  name            String
-  phone           String?
-  email           String?
-  role            EmployeeRole     @default(URETIM)
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  JobHistory      JobHistory[]
-  JobNote         JobNote[]
-  JobPhoto        JobPhoto[]
-  productionSteps ProductionStep[]
+  id               String            @id @default(cuid())
+  name             String
+  phone            String?
+  email            String?
+  role             EmployeeRole
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  password         String
+  username         String            @unique
+  dashboardSetting DashboardSetting?
+  jobHistories     JobHistory[]
+  jobNotes         JobNote[]
+  jobPhotos        JobPhoto[]
+  productionSteps  ProductionStep[]
 
   @@index([name])
   @@index([role])
   @@index([isActive])
 }
 
+model DashboardSetting {
+  id         String   @id @default(cuid())
+  employeeId String   @unique
+  jobs       Boolean  @default(true)
+  production Boolean  @default(true)
+  employees  Boolean  @default(true)
+  customers  Boolean  @default(true)
+  deliveries Boolean  @default(true)
+  reports    Boolean  @default(false)
+  photos     Boolean  @default(false)
+  files      Boolean  @default(false)
+  notes      Boolean  @default(false)
+  calendar   Boolean  @default(false)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
 model Station {
-  id String @id @default(cuid())
-
-  name String @unique
-
-  icon String?
-
-  color String?
-
-  sortOrder Int @default(0)
-
-  isActive Boolean @default(true)
-
-  requirePhotoCount Int @default(0)
-
-  requireFile Boolean @default(false)
-
-  requireNote Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-
-  productionSteps ProductionStep[]
-
-  templateSteps TemplateStep[]
+  id                String           @id @default(cuid())
+  name              String           @unique
+  icon              String?
+  color             String?
+  sortOrder         Int              @default(0)
+  isActive          Boolean          @default(true)
+  requirePhotoCount Int              @default(0)
+  requireFile       Boolean          @default(false)
+  requireNote       Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  productionSteps   ProductionStep[]
+  templateSteps     TemplateStep[]
 
   @@index([sortOrder])
   @@index([isActive])
 }
 
 model Job {
-  id           String      @id @default(cuid())
-  jobNo        String      @unique
-  title        String
-  description  String?
-  width        Float?
-  height       Float?
-  quantity     Int?
-  material     String?
-  machine      String?
-  deliveryDate DateTime?
-  priority     JobPriority @default(NORMAL)
-  status       JobStatus   @default(BEKLIYOR)
-  customerId   String
-  isArchived   Boolean     @default(false)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  productionSteps ProductionStep[]
+  id              String           @id @default(cuid())
+  jobNo           String           @unique
+  title           String
+  description     String?
+  width           Float?
+  height          Float?
+  quantity        Int?
+  material        String?
+  machine         String?
+  deliveryDate    DateTime?
+  priority        JobPriority      @default(NORMAL)
+  customerId      String
+  isArchived      Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  status          JobStatus        @default(BEKLIYOR)
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
   files           JobFile[]
-  photos          JobPhoto[]
-  notes           JobNote[]
   history         JobHistory[]
+  notes           JobNote[]
+  photos          JobPhoto[]
+  productionSteps ProductionStep[]
 
   @@index([customerId])
   @@index([priority])
@@ -192,21 +197,17 @@ model JobNote {
 }
 
 model JobPhoto {
-  id String @id @default(cuid())
-
-  jobId      String
-  employeeId String?
-
+  id           String    @id @default(cuid())
+  jobId        String
+  employeeId   String?
   originalName String
   fileName     String
   filePath     String
-  fileType     String
   fileSize     Int
-
-  uploadedAt DateTime @default(now())
-
-  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  employee Employee? @relation(fields: [employeeId], references: [id])
+  fileType     String
+  uploadedAt   DateTime  @default(now())
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+  job          Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([employeeId])
@@ -263,9 +264,7 @@ enum FileCategory {
 enum EmployeeRole {
   ADMIN
   YONETICI
-  GRAFIK
-  URETIM
-  MONTAJ
+  PERSONEL
 }
 
 enum JobPriority {

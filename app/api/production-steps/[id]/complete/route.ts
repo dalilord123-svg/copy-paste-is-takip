@@ -34,6 +34,55 @@ export async function PATCH(
         throw new Error("ALREADY_COMPLETED");
       }
 
+// ===============================
+// İSTASYON KURALLARI
+// ===============================
+
+// Fotoğraf zorunluluğu
+if (currentStep.station.requirePhotoCount > 0) {
+  const photoCount = await tx.jobPhoto.count({
+    where: {
+      jobId: currentStep.jobId,
+    },
+  });
+
+  if (photoCount < currentStep.station.requirePhotoCount) {
+    throw new Error(
+      `Bu istasyonda en az ${currentStep.station.requirePhotoCount} fotoğraf yüklenmelidir.`
+    );
+  }
+}
+
+// Dosya zorunluluğu
+if (currentStep.station.requireFile) {
+  const fileCount = await tx.jobFile.count({
+    where: {
+      jobId: currentStep.jobId,
+    },
+  });
+
+  if (fileCount === 0) {
+    throw new Error(
+      "Bu istasyonda en az bir dosya yüklenmelidir."
+    );
+  }
+}
+
+// Not zorunluluğu
+if (currentStep.station.requireNote) {
+  const noteCount = await tx.jobNote.count({
+    where: {
+      jobId: currentStep.jobId,
+    },
+  });
+
+  if (noteCount === 0) {
+    throw new Error(
+      "Bu istasyonda en az bir not girilmelidir."
+    );
+  }
+}
+
       await tx.productionStep.update({
         where: {
           id,
@@ -221,7 +270,21 @@ export async function PATCH(
         }
       );
     }
-
+if (
+  error.message.includes("fotoğraf") ||
+  error.message.includes("dosya") ||
+  error.message.includes("not")
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: error.message,
+    },
+    {
+      status: 400,
+    }
+  );
+}
     return NextResponse.json(
       {
         success: false,
