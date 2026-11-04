@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ProductionStepStatus } from "@prisma/client";
@@ -13,74 +14,106 @@ export async function PATCH(
   { params }: RouteContext
 ) {
   try {
-    const { id } = await params;
-
+    const { id: jobId } = await params;
     const body = await request.json();
 
     const stepId = body.stepId as string | undefined;
-
     const status = body.status as ProductionStepStatus | undefined;
 
     if (!stepId || !status) {
       return NextResponse.json(
-        {
-          error: "stepId ve status zorunludur.",
-        },
-        {
-          status: 400,
-        }
+        { error: "stepId ve status zorunludur." },
+        { status: 400 }
       );
     }
 
-    const step = await prisma.productionStep.update({
+    const validStatuses = Object.values(ProductionStepStatus);
+
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: "Geçersiz üretim durumu." },
+        { status: 400 }
+      );
+    }
+
+    const existingStep = await prisma.productionStep.findFirst({
       where: {
         id: stepId,
+        jobId,
       },
-
-      data: {
-        status,
-
-        startedAt:
-          status === ProductionStepStatus.DEVAM_EDIYOR
-            ? new Date()
-            : undefined,
-
-        finishedAt:
-          status === ProductionStepStatus.TAMAMLANDI
-            ? new Date()
-            : undefined,
-      },
-
       include: {
         station: true,
-        employee: true,
-        job: true,
+        assignments: true,
       },
     });
 
-    await prisma.jobHistory.create({
-      data: {
-        jobId: step.jobId,
+    if (!existingStep) {
+      return NextResponse.json(
+        { error: "Üretim adımı bulunamadı." },
+        { status: 404 }
+      );
+    }
 
-        employeeId: step.employeeId,
+    const now = new Date();
 
-        action: "STATUS_CHANGED",
+    const step = await prisma.$transaction(async (tx) => {
+      const updatedStep = await tx.productionStep.update({
+        where: {
+          id: stepId,
+        },
+        data: {
+          status,
 
-        description: `${step.station.name} → ${status}`,
-      },
+          startedAt:
+            status === ProductionStepStatus.DEVAM_EDIYOR
+              ? existingStep.startedAt ?? now
+              : undefined,
+
+          finishedAt:
+            status === ProductionStepStatus.TAMAMLANDI
+              ? now
+              : status !== ProductionStepStatus.TAMAMLANDI
+                ? null
+                : undefined,
+
+          progress:
+            status === ProductionStepStatus.TAMAMLANDI
+              ? 100
+              : undefined,
+        },
+        include: {
+          station: true,
+          leader: true,
+          assignments: {
+            include: {
+              employee: true,
+            },
+          },
+          job: true,
+        },
+      });
+
+      await tx.jobHistory.create({
+        data: {
+          jobId: updatedStep.jobId,
+          action: "STATUS_CHANGED",
+          description: `${updatedStep.station.name} → ${status}`,
+        },
+      });
+
+      return updatedStep;
     });
 
-    return NextResponse.json(step);
+    return NextResponse.json({
+      success: true,
+      step,
+    });
   } catch (error) {
-    console.error(error);
+    console.error("STATUS UPDATE ERROR:", error);
 
     return NextResponse.json(
-      {
-        error: "Durum güncellenemedi.",
-      },
-      {
-        status: 500,
-      }
+      { error: "Durum güncellenemedi." },
+      { status: 500 }
     );
   }
 }

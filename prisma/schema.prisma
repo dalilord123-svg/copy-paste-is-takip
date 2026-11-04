@@ -16,31 +16,33 @@ model Customer {
   address   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  notes     String?
   jobs      Job[]
 
   @@index([company])
 }
 
 model Employee {
-  id               String            @id @default(cuid())
-  name             String
-  phone            String?
-  email            String?
-  role             EmployeeRole
-  isActive         Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  password         String
-  username         String            @unique
-  dashboardSetting DashboardSetting?
-  jobHistories     JobHistory[]
-  jobNotes         JobNote[]
-  jobPhotos        JobPhoto[]
-  productionSteps  ProductionStep[]
+  id           String                 @id @default(cuid())
+  name         String
+  phone        String?
+  email        String?
+  role         EmployeeRole
+  isActive     Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  password     String
+  username     String                 @unique
+  dashboard    DashboardSetting?
+  history      JobHistory[]
+  notes        JobNote[]
+  photos       JobPhoto[]
+  assignments  ProductionAssignment[]
+  leadingSteps ProductionStep[]       @relation("StepLeader")
 
   @@index([name])
   @@index([role])
-  @@index([isActive])
 }
 
 model DashboardSetting {
@@ -51,7 +53,7 @@ model DashboardSetting {
   employees  Boolean  @default(true)
   customers  Boolean  @default(true)
   deliveries Boolean  @default(true)
-  reports    Boolean  @default(false)
+  reports    Boolean  @default(true)
   photos     Boolean  @default(false)
   files      Boolean  @default(false)
   notes      Boolean  @default(false)
@@ -71,6 +73,7 @@ model Station {
   requireNote       Boolean          @default(false)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+  estimatedMinutes  Int              @default(0)
   productionSteps   ProductionStep[]
   templateSteps     TemplateStep[]
 
@@ -103,55 +106,60 @@ model Job {
   productionSteps ProductionStep[]
 
   @@index([customerId])
-  @@index([priority])
   @@index([deliveryDate])
-  @@index([isArchived])
-}
-
-model JobFile {
-  id           String       @id @default(cuid())
-  jobId        String
-  category     FileCategory @default(DIGER)
-  originalName String
-  fileName     String
-  filePath     String
-  fileType     String
-  fileSize     Int
-  uploadedAt   DateTime     @default(now())
-  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@index([jobId])
-  @@index([category])
+  @@index([priority])
+  @@index([status])
 }
 
 model ProductionStep {
-  id               String               @id @default(cuid())
+  id               String                 @id @default(cuid())
   jobId            String
   stationId        String
-  employeeId       String?
   stepOrder        Int
-  status           ProductionStepStatus @default(BEKLIYOR)
+  status           ProductionStepStatus   @default(BEKLIYOR)
   waitingReason    WaitingReason?
   waitingNote      String?
   estimatedMinutes Int?
   actualMinutes    Int?
-  progress         Int                  @default(0)
-  photoCount       Int                  @default(0)
-  fileCount        Int                  @default(0)
-  noteCount        Int                  @default(0)
+  progress         Int                    @default(0)
+  photoCount       Int                    @default(0)
+  fileCount        Int                    @default(0)
+  noteCount        Int                    @default(0)
   startedAt        DateTime?
   finishedAt       DateTime?
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  employee         Employee?            @relation(fields: [employeeId], references: [id])
-  job              Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  station          Station              @relation(fields: [stationId], references: [id])
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  leaderId         String?
+
+  assignments      ProductionAssignment[]
+  photos           JobPhoto[]
+
+  job              Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  leader           Employee?              @relation("StepLeader", fields: [leaderId], references: [id])
+  station          Station                @relation(fields: [stationId], references: [id])
 
   @@index([jobId])
   @@index([stationId])
-  @@index([employeeId])
+  @@index([leaderId])
   @@index([status])
   @@index([stepOrder])
+}
+
+model ProductionAssignment {
+  id               String               @id @default(cuid())
+  productionStepId String
+  employeeId       String
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  workedMinutes    Int?
+  status           ProductionStepStatus @default(BEKLIYOR)
+  createdAt        DateTime             @default(now())
+  employee         Employee             @relation(fields: [employeeId], references: [id])
+  productionStep   ProductionStep       @relation(fields: [productionStepId], references: [id], onDelete: Cascade)
+
+  @@unique([productionStepId, employeeId])
+  @@index([productionStepId])
+  @@index([employeeId])
 }
 
 model Template {
@@ -184,6 +192,43 @@ model TemplateStep {
   @@index([stationId])
 }
 
+model JobFile {
+  id           String       @id @default(cuid())
+  jobId        String
+  category     FileCategory @default(DIGER)
+  originalName String
+  fileName     String
+  filePath     String
+  fileType     String
+  fileSize     Int
+  uploadedAt   DateTime     @default(now())
+  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([category])
+}
+
+model JobPhoto {
+  id               String          @id @default(cuid())
+  jobId            String
+  productionStepId String?
+  employeeId       String?
+  originalName     String
+  fileName         String
+  filePath         String
+  fileSize         Int
+  fileType         String
+  uploadedAt       DateTime        @default(now())
+
+  employee         Employee?       @relation(fields: [employeeId], references: [id])
+  job              Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  productionStep   ProductionStep? @relation(fields: [productionStepId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([employeeId])
+  @@index([productionStepId])
+}
+
 model JobNote {
   id         String    @id @default(cuid())
   jobId      String
@@ -192,22 +237,6 @@ model JobNote {
   createdAt  DateTime  @default(now())
   employee   Employee? @relation(fields: [employeeId], references: [id])
   job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@index([jobId])
-}
-
-model JobPhoto {
-  id           String    @id @default(cuid())
-  jobId        String
-  employeeId   String?
-  originalName String
-  fileName     String
-  filePath     String
-  fileSize     Int
-  fileType     String
-  uploadedAt   DateTime  @default(now())
-  employee     Employee? @relation(fields: [employeeId], references: [id])
-  job          Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([employeeId])
@@ -224,6 +253,7 @@ model JobHistory {
   job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
+  @@index([employeeId])
 }
 
 enum JobStatus {

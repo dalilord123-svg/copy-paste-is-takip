@@ -1,5 +1,7 @@
+
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { ProductionStepStatus } from "@prisma/client";
 import EmployeeTable from "@/app/components/employees/EmployeeTable";
 
 export default async function EmployeesPage() {
@@ -8,25 +10,40 @@ export default async function EmployeesPage() {
       createdAt: "desc",
     },
     include: {
-      productionSteps: {
+      assignments: {
         where: {
           status: {
-            in: ["BEKLIYOR", "DEVAM_EDIYOR"],
+            in: [
+              ProductionStepStatus.BEKLIYOR,
+              ProductionStepStatus.DEVAM_EDIYOR,
+            ],
+          },
+        },
+        include: {
+          productionStep: {
+            include: {
+              station: true,
+              job: true,
+            },
           },
         },
       },
     },
   });
 
+  // EmployeeTable bileşeninin beklediği productionSteps alanını oluştur.
+  const employeesWithSteps = employees.map((employee) => ({
+    ...employee,
+    productionSteps: employee.assignments.map(
+      (assignment) => assignment.productionStep
+    ),
+  }));
+
   return (
     <main className="min-h-screen bg-slate-100 p-6">
-
       <div className="max-w-7xl mx-auto">
-
         <div className="flex items-center justify-between mb-6">
-
           <div>
-
             <h1 className="text-4xl font-bold">
               Personel Yönetimi
             </h1>
@@ -34,7 +51,6 @@ export default async function EmployeesPage() {
             <p className="text-gray-500 mt-2">
               Toplam {employees.length} personel
             </p>
-
           </div>
 
           <Link
@@ -43,13 +59,10 @@ export default async function EmployeesPage() {
           >
             + Yeni Personel
           </Link>
-
         </div>
 
-        <EmployeeTable employees={employees} />
-
+        <EmployeeTable employees={employeesWithSteps} />
       </div>
-
     </main>
   );
 }

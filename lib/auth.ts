@@ -1,36 +1,65 @@
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "copy_paste_super_secret_key";
+import jwt, { type JwtPayload as JsonWebTokenPayload } from "jsonwebtoken";
 
-export type JwtPayload = {
+export interface JwtPayload {
   id: string;
   username: string;
   role: string;
-};
-
-export async function hashPassword(password: string) {
-  return bcrypt.hash(password, 10);
 }
 
-export async function comparePassword(
-  password: string,
-  hash: string
-) {
-  return bcrypt.compare(password, hash);
+function getSecret(): string {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "JWT_SECRET eksik veya çok kısa. .env dosyasını kontrol edin."
+    );
+  }
+
+  return secret;
 }
 
-export function createToken(payload: JwtPayload) {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: "7d",
+export function signToken(payload: JwtPayload): string {
+  if (!payload.id || !payload.username || !payload.role) {
+    throw new Error("JWT için kullanıcı bilgileri eksik.");
+  }
+
+  return jwt.sign(payload, getSecret(), {
+    expiresIn: "30d",
   });
 }
 
-export function verifyToken(token: string): JwtPayload | null {
-  try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
-  } catch {
-    return null;
+export function verifyToken(token: string): JwtPayload {
+  if (!token) {
+    throw new Error("Token bulunamadı.");
   }
+
+  const decoded = jwt.verify(token, getSecret());
+
+  if (
+    typeof decoded === "string" ||
+    typeof decoded !== "object"
+  ) {
+    throw new Error("Geçersiz token.");
+  }
+
+  const payload = decoded as JsonWebTokenPayload & {
+    id?: string;
+    username?: string;
+    role?: string;
+  };
+
+  if (
+    typeof payload.id !== "string" ||
+    typeof payload.username !== "string" ||
+    typeof payload.role !== "string"
+  ) {
+    throw new Error("Token kullanıcı bilgileri geçersiz.");
+  }
+
+  return {
+    id: payload.id,
+    username: payload.username,
+    role: payload.role,
+  };
 }

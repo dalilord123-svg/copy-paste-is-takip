@@ -1,35 +1,39 @@
+// app/api/employees/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth";
+import { EmployeeRole } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 export async function GET() {
   try {
     const employees = await prisma.employee.findMany({
-      include: {
-        productionSteps: {
-          where: {
-            status: {
-              in: ["BEKLIYOR", "DEVAM_EDIYOR"],
-            },
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        role: true,
+        phone: true,
+        email: true,
+        isActive: true,
+        createdAt: true,
       },
       orderBy: {
-        createdAt: "desc",
+        name: "asc",
       },
     });
 
     return NextResponse.json({
       success: true,
-      data: employees,
+      employees,
     });
   } catch (error) {
-    console.error(error);
+    console.error("GET EMPLOYEES ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Personeller alınamadı.",
+        message: "Personeller alınamadı.",
       },
       {
         status: 500,
@@ -38,25 +42,46 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
 
-    const {
-      name,
-      username,
-      password,
-      phone,
-      email,
-      role,
-      isActive,
-    } = body;
+    const name =
+      typeof body.name === "string"
+        ? body.name.trim()
+        : "";
 
-    if (!name || !username || !password) {
+    const username =
+      typeof body.username === "string"
+        ? body.username.trim().toLowerCase()
+        : "";
+
+    const password =
+      typeof body.password === "string"
+        ? body.password
+        : "";
+
+    const role =
+      typeof body.role === "string"
+        ? body.role
+        : "";
+
+    const phone =
+      typeof body.phone === "string"
+        ? body.phone.trim()
+        : "";
+
+    const email =
+      typeof body.email === "string"
+        ? body.email.trim()
+        : "";
+
+    if (!name || !username || !password || !role) {
       return NextResponse.json(
         {
           success: false,
-          error: "Ad Soyad, Kullanıcı Adı ve Şifre zorunludur.",
+          message:
+            "Ad Soyad, Kullanıcı Adı, Şifre ve Rol zorunludur.",
         },
         {
           status: 400,
@@ -64,17 +89,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const usernameExists = await prisma.employee.findUnique({
-      where: {
-        username,
-      },
-    });
+    if (!Object.values(EmployeeRole).includes(role as EmployeeRole)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Geçersiz personel rolü.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const usernameExists =
+      await prisma.employee.findUnique({
+        where: {
+          username,
+        },
+      });
 
     if (usernameExists) {
       return NextResponse.json(
         {
           success: false,
-          error: "Bu kullanıcı adı zaten kullanılıyor.",
+          message:
+            "Bu kullanıcı adı zaten kullanılmaktadır.",
         },
         {
           status: 400,
@@ -82,37 +121,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const hashedPassword = await hashPassword(password);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const employee = await prisma.employee.create({
       data: {
         name,
         username,
-        password: hashedPassword,
+        password: passwordHash,
+        role: role as EmployeeRole,
         phone: phone || null,
         email: email || null,
-        role,
-        isActive,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        role: true,
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Personel başarıyla oluşturuldu.",
-        data: employee,
-      },
-      {
-        status: 201,
-      }
-    );
+    return NextResponse.json({
+      success: true,
+      message: "Personel başarıyla oluşturuldu.",
+      employee,
+    });
   } catch (error) {
-    console.error(error);
+    console.error("CREATE EMPLOYEE ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Personel oluşturulamadı.",
+        message: "Personel oluşturulamadı.",
       },
       {
         status: 500,

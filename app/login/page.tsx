@@ -1,20 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState("");
 
-  async function login(e: React.FormEvent) {
+  async function login(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (loading) return;
 
     setLoading(true);
     setError("");
@@ -22,11 +19,12 @@ export default function LoginPage() {
     try {
       const res = await fetch("/api/login", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username,
+          username: username.trim(),
           password,
         }),
       });
@@ -34,43 +32,45 @@ export default function LoginPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        setError(json.error);
+        setError(json.message ?? "Giriş başarısız.");
         setLoading(false);
         return;
       }
 
-      router.push("/employee");
-      router.refresh();
-    } catch {
-      setError("Sunucu hatası.");
-    }
+      // Cookie'nin tarayıcıya yazılması için kısa bekleme
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
-    setLoading(false);
+      window.location.replace("/employees");
+    } catch (err) {
+      console.error(err);
+      setError("Sunucuya bağlanılamadı.");
+      setLoading(false);
+    }
   }
 
   return (
     <main className="min-h-screen bg-slate-100 flex items-center justify-center">
-
       <form
         onSubmit={login}
         className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8"
       >
-
         <h1 className="text-3xl font-bold text-center mb-8">
           Personel Girişi
         </h1>
 
+        <label className="block mb-2">Kullanıcı Adı</label>
+
         <input
           className="w-full border rounded-xl p-4 mb-4"
-          placeholder="Kullanıcı Adı"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
 
+        <label className="block mb-2">Şifre</label>
+
         <input
-          className="w-full border rounded-xl p-4 mb-6"
-          placeholder="Şifre"
           type="password"
+          className="w-full border rounded-xl p-4 mb-6"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
@@ -83,13 +83,11 @@ export default function LoginPage() {
 
         <button
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 rounded-xl text-white py-4 font-bold"
+          className="w-full bg-blue-600 text-white rounded-xl py-4 font-bold"
         >
           {loading ? "Giriş Yapılıyor..." : "Giriş Yap"}
         </button>
-
       </form>
-
     </main>
   );
 }

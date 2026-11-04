@@ -1,3 +1,6 @@
+
+import { redirect } from "next/navigation";
+
 import Sidebar from "./components/layout/Sidebar";
 
 import DashboardHeader from "./components/dashboard/DashboardHeader";
@@ -8,20 +11,23 @@ import DashboardStatistics from "./components/dashboard/DashboardStatistics";
 import RecentJobs from "./components/dashboard/RecentJobs";
 
 import { getDashboardData } from "@/lib/dashboard";
+import { getCurrentUser } from "@/lib/getCurrentUser";
 
 export default async function HomePage() {
+  // Kullanıcı oturum kontrolü
+  const user = await getCurrentUser();
 
-  const data =
-    await getDashboardData();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const data = await getDashboardData();
 
   return (
-
     <div className="min-h-screen bg-gray-100 flex">
-
       <Sidebar />
 
       <main className="flex-1 p-6 lg:p-8">
-
         <DashboardHeader />
 
         <DashboardCards data={data} />
@@ -33,11 +39,7 @@ export default async function HomePage() {
         <DashboardStatistics data={data} />
 
         <RecentJobs jobs={data.recentJobs} />
-
       </main>
-
     </div>
-
   );
-
 }

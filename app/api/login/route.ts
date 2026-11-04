@@ -1,18 +1,28 @@
+
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { comparePassword, createToken } from "@/lib/auth";
+import { signToken } from "@/lib/auth";
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
 
-    const { username, password } = body;
+    const username =
+      typeof body.username === "string"
+        ? body.username.trim()
+        : "";
+
+    const password =
+      typeof body.password === "string"
+        ? body.password
+        : "";
 
     if (!username || !password) {
       return NextResponse.json(
         {
           success: false,
-          error: "Kullanıcı adı ve şifre zorunludur.",
+          message: "Kullanıcı adı ve şifre zorunludur.",
         },
         { status: 400 }
       );
@@ -24,42 +34,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!employee) {
+    if (!employee || !employee.isActive) {
       return NextResponse.json(
         {
           success: false,
-          error: "Kullanıcı bulunamadı.",
+          message: "Kullanıcı adı veya şifre hatalı.",
         },
         { status: 401 }
       );
     }
 
-    if (!employee.isActive) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Bu kullanıcı pasif durumda.",
-        },
-        { status: 403 }
-      );
-    }
-
-    const validPassword = await comparePassword(
+    const valid = await bcrypt.compare(
       password,
       employee.password
     );
 
-    if (!validPassword) {
+    if (!valid) {
       return NextResponse.json(
         {
           success: false,
-          error: "Şifre hatalı.",
+          message: "Kullanıcı adı veya şifre hatalı.",
         },
         { status: 401 }
       );
     }
 
-    const token = createToken({
+    const token = signToken({
       id: employee.id,
       username: employee.username,
       role: employee.role,
@@ -67,24 +67,18 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
-      employee: {
-        id: employee.id,
-        name: employee.name,
-        username: employee.username,
-        role: employee.role,
-      },
+      message: "Giriş başarılı.",
     });
 
     response.cookies.set({
-      name: "employee_token",
-      value: token,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
+  name: "employee_token",
+  value: token,
+  httpOnly: true,
+  secure: false,
+  sameSite: "lax",
+  path: "/",
+  maxAge: 60 * 60 * 24 * 30,
+});
     return response;
   } catch (error) {
     console.error("LOGIN ERROR:", error);
@@ -92,11 +86,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Sunucu hatası oluştu.",
+        message: "Giriş işlemi sırasında bir hata oluştu.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
+  
 }
+

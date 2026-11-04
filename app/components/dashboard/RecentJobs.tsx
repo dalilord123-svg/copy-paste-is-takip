@@ -10,12 +10,17 @@ export default async function RecentJobs() {
     include: {
       customer: true,
       productionSteps: {
-        include: {
-          station: true,
-          employee: true,
-        },
         orderBy: {
           stepOrder: "asc",
+        },
+        include: {
+          station: true,
+          leader: true,
+          assignments: {
+            include: {
+              employee: true,
+            },
+          },
         },
       },
     },
@@ -23,12 +28,8 @@ export default async function RecentJobs() {
 
   return (
     <div className="bg-white rounded-2xl shadow">
-
       <div className="flex items-center justify-between p-6 border-b">
-
-        <h2 className="text-2xl font-bold">
-          Son İşler
-        </h2>
+        <h2 className="text-2xl font-bold">Son İşler</h2>
 
         <Link
           href="/jobs"
@@ -36,7 +37,6 @@ export default async function RecentJobs() {
         >
           Tümünü Gör
         </Link>
-
       </div>
 
       {jobs.length === 0 && (
@@ -46,12 +46,15 @@ export default async function RecentJobs() {
       )}
 
       <div className="divide-y">
-
         {jobs.map((job) => {
-
           const activeStep = job.productionSteps.find(
             (x) => x.status === "DEVAM_EDIYOR"
           );
+
+          const employees =
+            activeStep?.assignments
+              .map((a) => a.employee.name)
+              .join(", ") ?? "-";
 
           return (
             <Link
@@ -60,9 +63,7 @@ export default async function RecentJobs() {
               className="block hover:bg-slate-50 transition"
             >
               <div className="p-5 flex justify-between">
-
                 <div>
-
                   <div className="text-sm text-gray-500">
                     {job.jobNo}
                   </div>
@@ -72,64 +73,40 @@ export default async function RecentJobs() {
                   </div>
 
                   <div className="mt-2 text-gray-500">
-
                     👤 {job.customer.company}
-
                   </div>
 
                   <div className="mt-2">
-
                     📍{" "}
-
                     <span className="font-semibold text-blue-600">
-
                       {activeStep?.station.name ?? "Tamamlandı"}
-
                     </span>
-
                   </div>
-
                 </div>
 
                 <div className="text-right">
-
                   <div className="font-semibold">
-
-                    {activeStep?.employee?.name ?? "-"}
-
+                    {employees}
                   </div>
 
                   <div className="mt-3">
-
                     <span className="rounded-full bg-blue-100 px-4 py-2 text-blue-700 text-sm font-semibold">
-
                       {activeStep?.status.replaceAll("_", " ") ??
                         "TAMAMLANDI"}
-
                     </span>
-
                   </div>
 
                   <div className="text-sm text-gray-500 mt-4">
-
                     {job.deliveryDate
-                      ? new Date(
-                          job.deliveryDate
-                        ).toLocaleDateString("tr-TR")
+                      ? new Date(job.deliveryDate).toLocaleDateString("tr-TR")
                       : "-"}
-
                   </div>
-
                 </div>
-
               </div>
-
             </Link>
           );
         })}
-
       </div>
-
     </div>
   );
 }

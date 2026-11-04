@@ -1,14 +1,7 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-
-import JobDetailHeader from "@/app/components/jobs/detail/JobDetailHeader";
-import JobInfoCard from "@/app/components/jobs/detail/JobInfoCard";
-import ProductionTimeline from "@/app/components/jobs/detail/ProductionTimeline";
-import FilesCard from "@/app/components/jobs/detail/FilesCard";
-import PhotosCard from "@/app/components/jobs/detail/PhotosCard";
-import NotesCard from "@/app/components/jobs/detail/NotesCard";
-import HistoryCard from "@/app/components/jobs/detail/HistoryCard";
-import ActionButtons from "@/app/components/jobs/detail/ActionButtons";
+import { getCurrentUser } from "@/lib/getCurrentUser";
 
 type Props = {
   params: Promise<{
@@ -17,6 +10,12 @@ type Props = {
 };
 
 export default async function JobDetailPage({ params }: Props) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   const { id } = await params;
 
   const job = await prisma.job.findUnique({
@@ -27,26 +26,22 @@ export default async function JobDetailPage({ params }: Props) {
       customer: true,
 
       productionSteps: {
-        include: {
-          station: true,
-          employee: true,
-        },
         orderBy: {
           stepOrder: "asc",
         },
-      },
-
-      files: {
-        orderBy: {
-          uploadedAt: "desc",
+        include: {
+          station: true,
+          leader: true,
+          assignments: {
+            include: {
+              employee: true,
+            },
+          },
         },
       },
 
-      photos: {
-        orderBy: {
-          uploadedAt: "desc",
-        },
-      },
+      photos: true,
+      files: true,
 
       notes: {
         include: {
@@ -73,223 +68,196 @@ export default async function JobDetailPage({ params }: Props) {
   }
 
   return (
-    <main className="max-w-7xl mx-auto p-8 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-3xl font-bold">
+            {job.title}
+          </h1>
 
-      <JobDetailHeader job={job} />
+          <p className="mt-2 text-gray-500">
+            {job.customer.company}
+          </p>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
-        <div className="xl:col-span-2 space-y-6">
-
-          <JobInfoCard job={job} />
-
-          <ProductionTimeline job={job} />
-
-          <FilesCard
-            jobId={job.id}
-            files={job.files}
-          />
-
-          <PhotosCard
-            jobId={job.id}
-            photos={job.photos}
-          />
-
+          <p className="mt-1 text-sm text-gray-400">
+            {job.jobNo}
+          </p>
         </div>
 
-        <div className="space-y-6">
-
-          <NotesCard
-            jobId={job.id}
-            notes={job.notes}
-          />
-
-          <HistoryCard
-            history={job.history}
-          />
-
-          <ActionButtons
-            job={{
-              id: job.id,
-              isArchived: job.isArchived,
-            }}
-          />
-
-        </div>
-
+        <Link
+          href="/jobs"
+          className="rounded-lg border px-5 py-3 text-center hover:bg-gray-50"
+        >
+          ← İşlere Dön
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+        <div className="rounded-xl border p-4">
+          <div className="text-sm text-gray-500">
+            Durum
+          </div>
 
-        <div className="bg-white rounded-xl border p-6">
-          <h3 className="font-bold text-lg mb-4">
-            Dosya Sayısı
-          </h3>
-
-          <div className="text-5xl font-bold text-blue-600">
-            {job.files.length}
+          <div className="mt-1 text-lg font-bold">
+            {job.status}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border p-6">
-          <h3 className="font-bold text-lg mb-4">
-            Fotoğraf
+        <div className="rounded-xl border p-4">
+          <div className="text-sm text-gray-500">
+            Öncelik
+          </div>
+
+          <div className="mt-1 text-lg font-bold">
+            {job.priority}
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-4">
+          <div className="text-sm text-gray-500">
+            Teslim
+          </div>
+
+          <div className="mt-1 text-lg font-bold">
+            {job.deliveryDate
+              ? new Date(job.deliveryDate).toLocaleDateString("tr-TR")
+              : "-"}
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-4">
+          <div className="text-sm text-gray-500">
+            Üretim Adımı
+          </div>
+
+          <div className="mt-1 text-lg font-bold">
+            {job.productionSteps.length}
+          </div>
+        </div>
+      </div>
+
+      <section className="space-y-5">
+        <h2 className="text-2xl font-bold">
+          Üretim Akışı
+        </h2>
+
+        {job.productionSteps.length === 0 ? (
+          <div className="rounded-xl border p-5 text-gray-500">
+            Bu işe henüz üretim adımı eklenmemiş.
+          </div>
+        ) : (
+          job.productionSteps.map((step) => (
+            <div
+              key={step.id}
+              className="rounded-xl border p-5"
+            >
+              <div className="flex flex-col justify-between gap-4 sm:flex-row">
+                <div>
+                  <h3 className="text-lg font-bold">
+                    {step.stepOrder}. {step.station.name}
+                  </h3>
+
+                  <div className="mt-2 text-sm text-gray-500">
+                    Durum: {step.status}
+                  </div>
+
+                  <div className="text-sm text-gray-500">
+                    İlerleme: %{step.progress}
+                  </div>
+                </div>
+
+                <div className="sm:text-right">
+                  <div className="font-semibold">
+                    Ustabaşı
+                  </div>
+
+                  <div>
+                    {step.leader?.name ?? "-"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <div className="mb-2 font-semibold">
+                  Personeller
+                </div>
+
+                {step.assignments.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    Henüz personel atanmamış.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {step.assignments.map((assignment) => (
+                      <span
+                        key={assignment.id}
+                        className="rounded-full bg-gray-100 px-3 py-1 text-sm"
+                      >
+                        {assignment.employee.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="rounded-xl border p-5">
+          <h3 className="mb-4 font-bold">
+            Notlar
           </h3>
 
-          <div className="text-5xl font-bold text-green-600">
+          <div className="space-y-3">
+            {job.notes.length === 0 ? (
+              <p className="text-sm text-gray-400">
+                Henüz not eklenmemiş.
+              </p>
+            ) : (
+              job.notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="rounded-lg border p-3"
+                >
+                  <div className="font-medium">
+                    {note.employee?.name ?? "Sistem"}
+                  </div>
+
+                  <div className="mt-1 text-sm">
+                    {note.note}
+                  </div>
+
+                  <div className="mt-2 text-xs text-gray-400">
+                    {new Date(note.createdAt).toLocaleString("tr-TR")}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-5">
+          <h3 className="mb-4 font-bold">
+            Fotoğraflar
+          </h3>
+
+          <div className="text-3xl font-bold">
             {job.photos.length}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border p-6">
-          <h3 className="font-bold text-lg mb-4">
-            Not
+        <div className="rounded-xl border p-5">
+          <h3 className="mb-4 font-bold">
+            Dosyalar
           </h3>
 
-          <div className="text-5xl font-bold text-orange-500">
-            {job.notes.length}
+          <div className="text-3xl font-bold">
+            {job.files.length}
           </div>
         </div>
-
-        <div className="bg-white rounded-xl border p-6">
-          <h3 className="font-bold text-lg mb-4">
-            Üretim Adımı
-          </h3>
-
-          <div className="text-5xl font-bold text-purple-600">
-            {job.productionSteps.length}
-          </div>
-        </div>
-
       </div>
-
-      <div className="bg-white rounded-xl border p-6">
-
-        <h2 className="text-xl font-bold mb-6">
-          Üretim Özeti
-        </h2>
-
-        <div className="space-y-4">
-
-          {job.productionSteps.map((step) => (
-
-            <div
-              key={step.id}
-              className="flex justify-between items-center border rounded-lg p-4"
-            >
-
-              <div>
-
-                <div className="font-semibold">
-                  {step.station.name}
-                </div>
-
-                <div className="text-sm text-gray-500">
-                  {step.employee?.name ?? "Personel Atanmadı"}
-                </div>
-
-              </div>
-
-              <div className="flex items-center gap-4">
-
-                <div className="font-semibold">
-                  %{step.progress}
-                </div>
-
-                <div>
-                  {step.status}
-                </div>
-
-              </div>
-
-            </div>
-
-          ))}
-
-        </div>
-
-      </div>
-
-      <div className="bg-white rounded-xl border p-6">
-
-        <h2 className="text-xl font-bold mb-6">
-          Genel Bilgiler
-        </h2>
-
-        <div className="grid md:grid-cols-2 gap-6">
-
-          <div>
-            <div className="text-sm text-gray-500">
-              İş Numarası
-            </div>
-
-            <div className="font-semibold text-lg">
-              {job.jobNo}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-sm text-gray-500">
-              Müşteri
-            </div>
-
-            <div className="font-semibold text-lg">
-              {job.customer.company}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-sm text-gray-500">
-              Oluşturulma Tarihi
-            </div>
-
-            <div className="font-semibold">
-              {new Date(job.createdAt).toLocaleString("tr-TR")}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-sm text-gray-500">
-              Son Güncelleme
-            </div>
-
-            <div className="font-semibold">
-              {new Date(job.updatedAt).toLocaleString("tr-TR")}
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
     </main>
   );
-}
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-export async function generateMetadata({ params }: Props) {
-  const { id } = await params;
-
-  const job = await prisma.job.findUnique({
-    where: {
-      id,
-    },
-    select: {
-      title: true,
-      jobNo: true,
-    },
-  });
-
-  if (!job) {
-    return {
-      title: "İş Bulunamadı",
-    };
-  }
-
-  return {
-    title: `${job.jobNo} - ${job.title}`,
-    description: "COPY PASTE İş Takip",
-  };
 }

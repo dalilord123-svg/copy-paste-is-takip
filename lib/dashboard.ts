@@ -74,12 +74,24 @@ export async function getDashboardData() {
     }),
 
     prisma.productionStep.findMany({
-      include: {
-        station: true,
-        employee: true,
-      },
       orderBy: {
         stepOrder: "asc",
+      },
+      include: {
+        station: true,
+        leader: true,
+
+        job: {
+          include: {
+            customer: true,
+          },
+        },
+
+        assignments: {
+          include: {
+            employee: true,
+          },
+        },
       },
     }),
 

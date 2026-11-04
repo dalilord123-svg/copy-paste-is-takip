@@ -1,6 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { JobStatus, ProductionStepStatus } from "@prisma/client";
+import {
+  ProductionStepStatus,
+  JobStatus,
+  EmployeeRole,
+} from "@prisma/client";
+import { getCurrentUser } from "@/lib/getCurrentUser";
 
 type Props = {
   params: Promise<{
@@ -8,113 +13,171 @@ type Props = {
   }>;
 };
 
-export async function PATCH(
-  request: Request,
+export async function POST(
+  req: NextRequest,
   { params }: Props
 ) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Oturum açmanız gerekiyor.",
+        },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
-    const result = await prisma.$transaction(async (tx) => {
+    const step = await prisma.productionStep.findUnique({
+      where: { id },
+      include: {
+        station: true,
+        job: true,
+        assignments: {
+          include: {
+            employee: true,
+          },
+        },
+      },
+    });
+
+    if (!step) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Üretim adımı bulunamadı.",
+        },
+        { status: 404 }
+      );
+    }
+
+    if (
+      step.status === ProductionStepStatus.TAMAMLANDI ||
+      step.status === ProductionStepStatus.IPTAL
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Bu üretim adımı tamamlanamaz.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const isManager =
+      user.role === EmployeeRole.ADMIN ||
+      user.role === EmployeeRole.YONETICI;
+
+    const isLeader = step.leaderId === user.id;
+
+    const isAssigned = step.assignments.some(
+      (assignment) => assignment.employeeId === user.id
+    );
+
+    if (!isManager && !isLeader && !isAssigned) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Bu üretim adımını tamamlamak için yetkiniz yok.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (step.photoCount < step.station.requirePhotoCount) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Bu istasyon için en az ${step.station.requirePhotoCount} fotoğraf yüklenmelidir.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (step.station.requireFile && step.fileCount < 1) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Bu istasyon için en az bir dosya yüklenmelidir.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (step.station.requireNote && step.noteCount < 1) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Bu istasyon için en az bir not eklenmelidir.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+
+    await prisma.$transaction(async (tx) => {
       const currentStep = await tx.productionStep.findUnique({
-        where: {
-          id,
-        },
-        include: {
-          station: true,
-          job: true,
-        },
+        where: { id },
       });
 
-      if (!currentStep) {
-        throw new Error("NOT_FOUND");
+      if (
+        !currentStep ||
+        currentStep.status === ProductionStepStatus.TAMAMLANDI ||
+        currentStep.status === ProductionStepStatus.IPTAL
+      ) {
+        throw new Error("Bu üretim adımı artık tamamlanamaz.");
       }
-
-      if (currentStep.status === ProductionStepStatus.TAMAMLANDI) {
-        throw new Error("ALREADY_COMPLETED");
-      }
-
-// ===============================
-// İSTASYON KURALLARI
-// ===============================
-
-// Fotoğraf zorunluluğu
-if (currentStep.station.requirePhotoCount > 0) {
-  const photoCount = await tx.jobPhoto.count({
-    where: {
-      jobId: currentStep.jobId,
-    },
-  });
-
-  if (photoCount < currentStep.station.requirePhotoCount) {
-    throw new Error(
-      `Bu istasyonda en az ${currentStep.station.requirePhotoCount} fotoğraf yüklenmelidir.`
-    );
-  }
-}
-
-// Dosya zorunluluğu
-if (currentStep.station.requireFile) {
-  const fileCount = await tx.jobFile.count({
-    where: {
-      jobId: currentStep.jobId,
-    },
-  });
-
-  if (fileCount === 0) {
-    throw new Error(
-      "Bu istasyonda en az bir dosya yüklenmelidir."
-    );
-  }
-}
-
-// Not zorunluluğu
-if (currentStep.station.requireNote) {
-  const noteCount = await tx.jobNote.count({
-    where: {
-      jobId: currentStep.jobId,
-    },
-  });
-
-  if (noteCount === 0) {
-    throw new Error(
-      "Bu istasyonda en az bir not girilmelidir."
-    );
-  }
-}
 
       await tx.productionStep.update({
-        where: {
-          id,
-        },
+        where: { id },
         data: {
           status: ProductionStepStatus.TAMAMLANDI,
           progress: 100,
-          finishedAt: new Date(),
+          finishedAt: now,
+        },
+      });
+
+      await tx.productionAssignment.updateMany({
+        where: {
+          productionStepId: id,
+        },
+        data: {
+          status: ProductionStepStatus.TAMAMLANDI,
+          finishedAt: now,
         },
       });
 
       await tx.jobHistory.create({
         data: {
-          jobId: currentStep.jobId,
+          jobId: step.jobId,
+          employeeId: user.id,
           action: "STEP_COMPLETED",
-          description: `${currentStep.station.name} istasyonu tamamlandı.`,
+          description: `${step.station.name} üretim adımı tamamlandı.`,
         },
       });
 
+      // Sıradaki üretim adımını bul.
       const nextStep = await tx.productionStep.findFirst({
         where: {
-          jobId: currentStep.jobId,
+          jobId: step.jobId,
           stepOrder: {
-            gt: currentStep.stepOrder,
+            gt: step.stepOrder,
+          },
+          status: {
+            not: ProductionStepStatus.IPTAL,
           },
         },
         orderBy: {
           stepOrder: "asc",
         },
         include: {
+          assignments: true,
           station: true,
-          employee: true,
         },
       });
 
@@ -124,175 +187,103 @@ if (currentStep.station.requireNote) {
             id: nextStep.id,
           },
           data: {
-            status: ProductionStepStatus.DEVAM_EDIYOR,
-            startedAt: nextStep.startedAt ?? new Date(),
-            progress: nextStep.progress === 0 ? 1 : nextStep.progress,
+            status: ProductionStepStatus.HAZIR,
+          },
+        });
+
+        // Sonraki aşamanın ilk personelini başlat.
+        const firstAssignment = nextStep.assignments[0];
+
+        if (firstAssignment) {
+          await tx.productionAssignment.update({
+            where: {
+              id: firstAssignment.id,
+            },
+            data: {
+              status: ProductionStepStatus.DEVAM_EDIYOR,
+              startedAt: now,
+            },
+          });
+
+          await tx.productionStep.update({
+            where: {
+              id: nextStep.id,
+            },
+            data: {
+              status: ProductionStepStatus.DEVAM_EDIYOR,
+              startedAt: now,
+            },
+          });
+        }
+
+        await tx.job.update({
+          where: {
+            id: step.jobId,
+          },
+          data: {
+            status: JobStatus.DEVAM_EDIYOR,
           },
         });
 
         await tx.jobHistory.create({
           data: {
-            jobId: currentStep.jobId,
-            action: "STEP_STARTED",
-            description: `${nextStep.station.name} istasyonu otomatik başlatıldı.`,
+            jobId: step.jobId,
+            employeeId: user.id,
+            action: "NEXT_STEP_STARTED",
+            description: `${nextStep.station.name} aşamasına geçildi.`,
           },
         });
       } else {
-        await tx.job.update({
+        const remaining = await tx.productionStep.count({
           where: {
-            id: currentStep.jobId,
-          },
-          data: {
-            status: JobStatus.TAMAMLANDI,
+            jobId: step.jobId,
+            status: {
+              notIn: [
+                ProductionStepStatus.TAMAMLANDI,
+                ProductionStepStatus.IPTAL,
+              ],
+            },
           },
         });
 
-        await tx.jobHistory.create({
-          data: {
-            jobId: currentStep.jobId,
-            action: "JOB_COMPLETED",
-            description: "İş tamamen tamamlandı.",
-          },
-        });
+        if (remaining === 0) {
+          await tx.job.update({
+            where: {
+              id: step.jobId,
+            },
+            data: {
+              status: JobStatus.TAMAMLANDI,
+            },
+          });
+
+          await tx.jobHistory.create({
+            data: {
+              jobId: step.jobId,
+              employeeId: user.id,
+              action: "JOB_COMPLETED",
+              description:
+                "Bütün üretim aşamaları tamamlandı. İş tamamlandı.",
+            },
+          });
+        }
       }
-
-      const updatedJob = await tx.job.findUnique({
-        where: {
-          id: currentStep.jobId,
-        },
-        include: {
-          customer: true,
-          productionSteps: {
-            include: {
-              station: true,
-              employee: true,
-            },
-            orderBy: {
-              stepOrder: "asc",
-            },
-          },
-          files: {
-            orderBy: {
-              uploadedAt: "desc",
-            },
-          },
-          notes: {
-            include: {
-              employee: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          },
-          photos: {
-            include: {
-              employee: true,
-            },
-            orderBy: {
-              uploadedAt: "desc",
-            },
-          },
-          history: {
-            include: {
-              employee: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          },
-        },
-      });
-
-      if (!updatedJob) {
-        throw new Error("JOB_NOT_FOUND");
-      }
-
-      return updatedJob;
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Üretim adımı başarıyla tamamlandı.",
-        data: result,
-      },
-      {
-        status: 200,
-      }
+    return NextResponse.redirect(
+      new URL(`/mobile/jobs/${step.jobId}`, req.url)
     );
   } catch (error) {
     console.error("COMPLETE PRODUCTION STEP ERROR:", error);
 
-    if (error instanceof Error) {
-      if (error.message === "NOT_FOUND") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Üretim adımı bulunamadı.",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
-      if (error.message === "ALREADY_COMPLETED") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Bu adım zaten tamamlandı.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      if (error.message === "JOB_NOT_FOUND") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "İş bulunamadı.",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-if (
-  error.message.includes("fotoğraf") ||
-  error.message.includes("dosya") ||
-  error.message.includes("not")
-) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: error.message,
-    },
-    {
-      status: 400,
-    }
-  );
-}
     return NextResponse.json(
       {
         success: false,
-        error: "Beklenmeyen bir hata oluştu.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Üretim adımı tamamlanamadı.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

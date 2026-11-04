@@ -1,184 +1,300 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
 import {
+  JobStatus,
   ProductionStepStatus,
+  EmployeeRole,
 } from "@prisma/client";
+import { getCurrentUser } from "@/lib/getCurrentUser";
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const user = await getCurrentUser();
 
-    const stepId = body.stepId as string;
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Oturum açmanız gerekiyor." },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const stepId =
+      typeof body.stepId === "string" ? body.stepId : "";
 
     if (!stepId) {
       return NextResponse.json(
-        {
-          error: "stepId gerekli.",
-        },
-        {
-          status: 400,
-        }
+        { success: false, error: "stepId gerekli." },
+        { status: 400 }
       );
     }
 
     const currentStep = await prisma.productionStep.findUnique({
-      where: {
-        id: stepId,
-      },
+      where: { id: stepId },
       include: {
         station: true,
-        job: true,
-        employee: true,
+        assignments: {
+          select: {
+            employeeId: true,
+          },
+        },
       },
     });
 
     if (!currentStep) {
       return NextResponse.json(
-        {
-          error: "Üretim adımı bulunamadı.",
-        },
-        {
-          status: 404,
-        }
+        { success: false, error: "Üretim adımı bulunamadı." },
+        { status: 404 }
       );
     }
 
-    // Personel kontrolü
-    if (!currentStep.employeeId) {
+    const isManager =
+      user.role === EmployeeRole.ADMIN ||
+      user.role === EmployeeRole.YONETICI;
+
+    const isLeader = currentStep.leaderId === user.id;
+
+    const isAssigned = currentStep.assignments.some(
+      (assignment) => assignment.employeeId === user.id
+    );
+
+    if (!isManager && !isLeader && !isAssigned) {
       return NextResponse.json(
         {
-          error: "Personel atanmadan sonraki aşamaya geçilemez.",
+          success: false,
+          error: "Bu üretim aşamasını ilerletmek için yetkiniz yok.",
         },
-        {
-          status: 400,
-        }
+        { status: 403 }
       );
     }
 
-    // İlerleme kontrolü
+    if (
+      currentStep.status !== ProductionStepStatus.DEVAM_EDIYOR &&
+      currentStep.status !== ProductionStepStatus.HAZIR
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Bu aşamanın mevcut durumu tamamlamaya uygun değil.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (currentStep.assignments.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Personel atanmadan sonraki aşamaya geçilemez.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (currentStep.progress < 100) {
       return NextResponse.json(
         {
+          success: false,
           error: "İlerleme %100 olmadan sonraki aşamaya geçilemez.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    // Beklemede kontrolü
     if (
-      currentStep.status ===
-      ProductionStepStatus.BEKLEMEDE
+      currentStep.photoCount < currentStep.station.requirePhotoCount
     ) {
       return NextResponse.json(
         {
-          error: "İş beklemede olduğu için ilerleyemez.",
+          success: false,
+          error: `Bu aşama için en az ${currentStep.station.requirePhotoCount} fotoğraf yüklenmelidir.`,
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    // Montaj fotoğraf kontrolü
-    if (
-      currentStep.station.name === "Montaj" &&
-      currentStep.photoCount < 2
-    ) {
+    if (currentStep.station.requireFile && currentStep.fileCount < 1) {
       return NextResponse.json(
         {
-          error:
-            "Montaj tamamlanmadan önce en az 2 fotoğraf yüklenmelidir.",
+          success: false,
+          error: "Bu aşama için en az bir dosya yüklenmelidir.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    const allSteps =
-      await prisma.productionStep.findMany({
+    if (currentStep.station.requireNote && currentStep.noteCount < 1) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Bu aşama için en az bir not eklenmelidir.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+
+    const result = await prisma.$transaction(async (tx) => {
+      const latestStep = await tx.productionStep.findUnique({
+        where: { id: stepId },
+        include: {
+          station: true,
+          assignments: true,
+        },
+      });
+
+      if (!latestStep) {
+        throw new Error("Üretim adımı bulunamadı.");
+      }
+
+      if (
+        latestStep.status !== ProductionStepStatus.DEVAM_EDIYOR &&
+        latestStep.status !== ProductionStepStatus.HAZIR
+      ) {
+        throw new Error("Üretim adımının durumu tamamlamaya uygun değil.");
+      }
+
+      if (latestStep.progress < 100) {
+        throw new Error("Üretim ilerlemesi henüz %100 değil.");
+      }
+
+      const nextStep = await tx.productionStep.findFirst({
         where: {
-          jobId: currentStep.jobId,
+          jobId: latestStep.jobId,
+          stepOrder: {
+            gt: latestStep.stepOrder,
+          },
+          status: {
+            not: ProductionStepStatus.IPTAL,
+          },
         },
         orderBy: {
           stepOrder: "asc",
         },
+        include: {
+          assignments: true,
+          station: true,
+        },
       });
 
-    const index = allSteps.findIndex(
-      (x) => x.id === currentStep.id
-    );
+      if (nextStep) {
+        if (
+          nextStep.status === ProductionStepStatus.TAMAMLANDI ||
+          nextStep.status === ProductionStepStatus.BEKLEMEDE ||
+          nextStep.assignments.length === 0
+        ) {
+          throw new Error(
+            "Sonraki aşama başlatılamıyor. Personel atamasını ve aşama durumunu kontrol edin."
+          );
+        }
+      }
 
-    const nextStep = allSteps[index + 1];
-
-    await prisma.$transaction(async (tx) => {
-      // Mevcut adımı bitir
       await tx.productionStep.update({
+        where: { id: stepId },
+        data: {
+          status: ProductionStepStatus.TAMAMLANDI,
+          progress: 100,
+          finishedAt: now,
+        },
+      });
+
+      await tx.productionAssignment.updateMany({
         where: {
-          id: currentStep.id,
+          productionStepId: stepId,
         },
         data: {
-          status:
-            ProductionStepStatus.TAMAMLANDI,
-          progress: 100,
-          finishedAt: new Date(),
+          status: ProductionStepStatus.TAMAMLANDI,
+          finishedAt: now,
         },
       });
 
-      // Sonraki adımı başlat
       if (nextStep) {
         await tx.productionStep.update({
+          where: { id: nextStep.id },
+          data: {
+            status: ProductionStepStatus.DEVAM_EDIYOR,
+            progress: nextStep.progress === 0 ? 1 : nextStep.progress,
+            startedAt: nextStep.startedAt ?? now,
+            waitingReason: null,
+            waitingNote: null,
+          },
+        });
+
+        await tx.productionAssignment.updateMany({
           where: {
-            id: nextStep.id,
+            productionStepId: nextStep.id,
           },
           data: {
-            status:
-              ProductionStepStatus.DEVAM_EDIYOR,
-            progress:
-              nextStep.progress === 0
-                ? 1
-                : nextStep.progress,
-            startedAt:
-              nextStep.startedAt ??
-              new Date(),
+            status: ProductionStepStatus.DEVAM_EDIYOR,
+            startedAt: now,
+            finishedAt: null,
+          },
+        });
+
+        await tx.job.update({
+          where: { id: latestStep.jobId },
+          data: {
+            status: JobStatus.DEVAM_EDIYOR,
+          },
+        });
+      } else {
+        await tx.job.update({
+          where: { id: latestStep.jobId },
+          data: {
+            status: JobStatus.TAMAMLANDI,
           },
         });
       }
 
-      // History
       await tx.jobHistory.create({
         data: {
-          jobId: currentStep.jobId,
-          employeeId:
-            currentStep.employeeId,
+          jobId: latestStep.jobId,
+          employeeId: user.id,
           action: "NEXT_STEP",
           description: nextStep
-            ? `${currentStep.station.name} tamamlandı → ${nextStep.stepOrder}. adım başladı`
-            : `${currentStep.station.name} tamamlandı. İş tamamen tamamlandı.`,
+            ? `${latestStep.station.name} tamamlandı. ${nextStep.station.name} aşaması başlatıldı.`
+            : `${latestStep.station.name} tamamlandı. İş tamamen tamamlandı.`,
         },
       });
+
+      if (!nextStep) {
+        await tx.jobHistory.create({
+          data: {
+            jobId: latestStep.jobId,
+            employeeId: user.id,
+            action: "JOB_COMPLETED",
+            description: "Bütün üretim aşamaları tamamlandı. İş tamamlandı.",
+          },
+        });
+      }
+
+      return {
+        currentStepId: stepId,
+        nextStepId: nextStep?.id ?? null,
+        jobCompleted: !nextStep,
+      };
     });
 
     return NextResponse.json({
       success: true,
-      currentStepId: currentStep.id,
-      nextStepId: nextStep?.id ?? null,
+      message: result.jobCompleted
+        ? "İş başarıyla tamamlandı."
+        : "Sonraki üretim aşaması başlatıldı.",
+      ...result,
     });
-
   } catch (error) {
-    console.error(error);
+    console.error("NEXT PRODUCTION STEP ERROR:", error);
 
     return NextResponse.json(
       {
+        success: false,
         error:
-          "Sonraki aşamaya geçilemedi.",
+          error instanceof Error
+            ? error.message
+            : "Sonraki aşamaya geçilemedi.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
