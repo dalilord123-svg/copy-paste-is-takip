@@ -174,7 +174,6 @@ export default function NewJobPage() {
     setError("");
     if (!customerId) return setError("Lütfen müşteri seçin.");
     if (!title.trim()) return setError("Lütfen iş adını girin.");
-    if (!templateId) return setError("Lütfen üretim şablonu seçin.");
     if (!leaderId) return setError("Lütfen genel ustabaşı seçin.");
     if (steps.length === 0) return setError("İş için en az bir üretim kademesi ekleyin.");
 
