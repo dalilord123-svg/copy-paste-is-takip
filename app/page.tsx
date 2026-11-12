@@ -1,44 +1,36 @@
 
 import { redirect } from "next/navigation";
 
-import Sidebar from "./components/layout/Sidebar";
+import Sidebar from "@/components/dashboard/Sidebar";
+import DashboardHeader from "@/components/dashboard/Header";
+import StatsCards from "@/components/dashboard/StatsCards";
+import QuickActions from "@/components/dashboard/QuickActions";
+import ProductionStatus from "@/components/dashboard/ProductionStatus";
+import RecentJobs from "@/components/dashboard/RecentJobs";
 
-import DashboardHeader from "./components/dashboard/DashboardHeader";
-import DashboardCards from "./components/dashboard/DashboardCards";
-import QuickActions from "./components/dashboard/QuickActions";
-import ProductionStatus from "./components/dashboard/ProductionStatus";
-import DashboardStatistics from "./components/dashboard/DashboardStatistics";
-import RecentJobs from "./components/dashboard/RecentJobs";
-
-import { getDashboardData } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/getCurrentUser";
 
 export default async function HomePage() {
-  // Kullanıcı oturum kontrolü
   const user = await getCurrentUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  const data = await getDashboardData();
-
   return (
     <div className="min-h-screen bg-gray-100 flex">
       <Sidebar />
 
-      <main className="flex-1 p-6 lg:p-8">
+      <main className="flex-1 min-w-0 p-4 lg:p-8 space-y-6">
         <DashboardHeader />
 
-        <DashboardCards data={data} />
+        <StatsCards />
 
         <QuickActions />
 
-        <ProductionStatus data={data} />
+        <ProductionStatus />
 
-        <DashboardStatistics data={data} />
-
-        <RecentJobs jobs={data.recentJobs} />
+        <RecentJobs />
       </main>
     </div>
   );

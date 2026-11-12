@@ -1,7 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { JobPriority } from "@prisma/client";
+import { JobPriority, JobStatus } from "@prisma/client";
 
 type RouteContext = {
   params: Promise<{
@@ -11,19 +11,16 @@ type RouteContext = {
 
 const jobInclude = {
   customer: true,
-
   files: {
     orderBy: {
       uploadedAt: "desc" as const,
     },
   },
-
   photos: {
     orderBy: {
       uploadedAt: "desc" as const,
     },
   },
-
   notes: {
     include: {
       employee: true,
@@ -32,7 +29,6 @@ const jobInclude = {
       createdAt: "desc" as const,
     },
   },
-
   history: {
     include: {
       employee: true,
@@ -41,7 +37,6 @@ const jobInclude = {
       createdAt: "desc" as const,
     },
   },
-
   productionSteps: {
     include: {
       station: true,
@@ -115,26 +110,47 @@ export async function PUT(
       );
     }
 
-    if (body.customerId) {
-      const customer = await prisma.customer.findUnique({
-        where: { id: body.customerId },
-        select: { id: true },
-      });
+    if (!body.customerId) {
+      return NextResponse.json(
+        { error: "Müşteri seçilmelidir." },
+        { status: 400 }
+      );
+    }
 
-      if (!customer) {
-        return NextResponse.json(
-          { error: "Müşteri bulunamadı." },
-          { status: 404 }
-        );
-      }
+    const customer = await prisma.customer.findUnique({
+      where: { id: body.customerId },
+      select: { id: true },
+    });
+
+    if (!customer) {
+      return NextResponse.json(
+        { error: "Müşteri bulunamadı." },
+        { status: 404 }
+      );
     }
 
     const validPriorities = Object.values(JobPriority);
+    const validStatuses = Object.values(JobStatus);
 
-    const priority =
-      body.priority && validPriorities.includes(body.priority)
-        ? body.priority
-        : JobPriority.NORMAL;
+    if (
+      body.priority !== undefined &&
+      !validPriorities.includes(body.priority)
+    ) {
+      return NextResponse.json(
+        { error: "Geçersiz öncelik değeri." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      body.status !== undefined &&
+      !validStatuses.includes(body.status)
+    ) {
+      return NextResponse.json(
+        { error: "Geçersiz iş durumu." },
+        { status: 400 }
+      );
+    }
 
     const parseNumber = (value: unknown) => {
       if (value === undefined || value === null || value === "") {
@@ -161,27 +177,31 @@ export async function PUT(
 
     const job = await prisma.job.update({
       where: { id },
-
       data: {
         customerId: body.customerId,
         title: body.title.trim(),
         description: body.description ?? null,
-
         width: parseNumber(body.width),
         height: parseNumber(body.height),
         quantity: parseNumber(body.quantity),
-
         material: body.material ?? null,
         machine: body.machine ?? null,
-
         deliveryDate,
-        priority,
+        ...(body.priority !== undefined && {
+          priority: body.priority,
+        }),
+        ...(body.status !== undefined && {
+          status: body.status,
+        }),
       },
-
       include: jobInclude,
     });
 
-    return NextResponse.json(job);
+    return NextResponse.json({
+      success: true,
+      message: "İş başarıyla güncellendi.",
+      data: job,
+    });
   } catch (error) {
     console.error("UPDATE JOB ERROR:", error);
 

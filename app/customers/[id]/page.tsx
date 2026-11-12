@@ -1,100 +1,86 @@
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
 import { prisma } from "@/lib/prisma";
-import { ProductionStepStatus, JobPriority } from "@prisma/client";
 
-function getPriorityColor(priority: JobPriority) {
-  switch (priority) {
-    case "ACIL":
-      return "bg-red-600 text-white";
-    case "YUKSEK":
-      return "bg-orange-500 text-white";
-    case "NORMAL":
-      return "bg-blue-500 text-white";
-    case "DUSUK":
-      return "bg-gray-400 text-white";
-    default:
-      return "bg-gray-300 text-black";
-  }
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+function getPriorityText(priority: string) {
+  const priorities: Record<string, string> = {
+    DUSUK: "Düşük",
+    NORMAL: "Normal",
+    YUKSEK: "Yüksek",
+    ACIL: "Acil",
+  };
+
+  return priorities[priority] ?? priority;
 }
 
-function getPriorityText(priority: JobPriority) {
-  switch (priority) {
-    case "ACIL":
-      return "Acil";
-    case "YUKSEK":
-      return "Yüksek";
-    case "NORMAL":
-      return "Normal";
-    case "DUSUK":
-      return "Düşük";
-    default:
-      return "-";
-  }
+function getPriorityColor(priority: string) {
+  const colors: Record<string, string> = {
+    DUSUK: "bg-gray-100 text-gray-700",
+    NORMAL: "bg-blue-100 text-blue-700",
+    YUKSEK: "bg-orange-100 text-orange-700",
+    ACIL: "bg-red-100 text-red-700",
+  };
+
+  return colors[priority] ?? "bg-gray-100 text-gray-700";
 }
 
 function getJobProgress(job: {
-  productionSteps: {
-    status: ProductionStepStatus;
-  }[];
+  productionSteps: { status: string }[];
 }) {
   const total = job.productionSteps.length;
 
-  if (total === 0) {
-    return {
-      total: 0,
-      completed: 0,
-      percent: 0,
-    };
-  }
-
   const completed = job.productionSteps.filter(
-    (step) => step.status === ProductionStepStatus.TAMAMLANDI
+    (step) => step.status === "TAMAMLANDI"
   ).length;
+
+  const percent =
+    total === 0 ? 0 : Math.round((completed / total) * 100);
 
   return {
     total,
     completed,
-    percent: Math.round((completed * 100) / total),
+    percent,
   };
+}
+
+function formatDate(date: Date | null) {
+  if (!date) return "-";
+
+  return new Date(date).toLocaleDateString("tr-TR");
 }
 
 export default async function CustomerDetailPage({
   params,
-}: {
-  params: Promise<{
-    id: string;
-  }>;
-}) {
+}: PageProps) {
   const { id } = await params;
 
- const customer = await prisma.customer.findUnique({
-  where: {
-    id,
-  },
-  include: {
-    jobs: {
-      where: {
-        isArchived: false,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        productionSteps: {
-          include: {
-            station: true,
-            employee: true,
-          },
-          orderBy: {
-            stepOrder: "asc",
+  const customer = await prisma.customer.findUnique({
+    where: {
+      id,
+    },
+    include: {
+      jobs: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          productionSteps: {
+            orderBy: {
+              stepOrder: "asc",
+            },
+            include: {
+              station: true,
+            },
           },
         },
       },
     },
-  },
-});
+  });
 
   if (!customer) {
     notFound();
@@ -102,273 +88,264 @@ export default async function CustomerDetailPage({
 
   const totalJobs = customer.jobs.length;
 
-  const activeJobs = customer.jobs.filter((job) => {
-    const progress = getJobProgress(job);
-    return progress.percent < 100;
-  }).length;
+  const activeJobs = customer.jobs.filter(
+    (job) => !job.isArchived
+  );
 
-  const completedJobs = customer.jobs.filter((job) => {
-    const progress = getJobProgress(job);
-    return progress.percent === 100;
-  }).length;
+  const archivedJobs = customer.jobs.filter(
+    (job) => job.isArchived
+  );
 
-  const waitingJobs = customer.jobs.filter((job) =>
-    job.productionSteps.some(
-      (step) => step.status === ProductionStepStatus.BEKLIYOR
-    )
-  ).length;
+  const completedJobs = customer.jobs.filter(
+    (job) =>
+      job.productionSteps.length > 0 &&
+      job.productionSteps.every(
+        (step) =>
+          step.status === "TAMAMLANDI" ||
+          step.status === "IPTAL"
+      )
+  );
 
-  const designJobs = customer.jobs.filter((job) =>
-    job.productionSteps.some((step) => step.station.name === "Tasarım")
-  ).length;
-
-  const printJobs = customer.jobs.filter((job) =>
-    job.productionSteps.some((step) => step.station.name === "Baskı")
-  ).length;
-
-  const cuttingJobs = customer.jobs.filter((job) =>
-    job.productionSteps.some((step) => step.station.name === "Kesim")
-  ).length;
-
-  const assemblyJobs = customer.jobs.filter((job) =>
-    job.productionSteps.some((step) => step.station.name === "Montaj")
-  ).length;
-
-  const lastDelivery = customer.jobs
-    .filter((job) => job.deliveryDate)
-    .sort(
-      (a, b) =>
-        new Date(b.deliveryDate!).getTime() -
-        new Date(a.deliveryDate!).getTime()
-    )[0];
+  const overdueJobs = activeJobs.filter(
+    (job) =>
+      job.deliveryDate &&
+      new Date(job.deliveryDate) < new Date() &&
+      !(
+        job.productionSteps.length > 0 &&
+        job.productionSteps.every(
+          (step) =>
+            step.status === "TAMAMLANDI" ||
+            step.status === "IPTAL"
+        )
+      )
+  );
 
   return (
-    <main className="max-w-7xl mx-auto p-8">
-      <Link
-        href="/customers"
-        className="text-blue-600 hover:underline"
-      >
-        ← Müşterilere Dön
-      </Link>
+    <main className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mt-6">
-        <div>
-          <h1 className="text-4xl font-bold">
-            {customer.company}
-          </h1>
+        {/* ÜST MENÜ */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <Link
+              href="/customers"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              ← Müşterilere Dön
+            </Link>
 
-          <p className="text-gray-500 mt-2">
-            {customer.contact || "-"}
-          </p>
-        </div>
+            <h1 className="text-3xl font-bold text-gray-900 mt-3">
+              {customer.company}
+            </h1>
 
-        <div className="flex gap-3">
-          <Link
-            href={`/jobs/new?customer=${customer.id}`}
-            className="bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl"
-          >
-            + Yeni İş
-          </Link>
+            <p className="text-gray-500 mt-1">
+              Müşteri detayları ve iş takip ekranı
+            </p>
+          </div>
 
           <Link
-            href={`/customers/${customer.id}/edit`}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-3 rounded-xl"
+            href="/jobs/new"
+            className="rounded-xl bg-blue-600 px-5 py-3 text-white font-semibold hover:bg-blue-700 transition"
           >
-            Düzenle
+            + Yeni İş Oluştur
           </Link>
         </div>
-      </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
-        <div className="bg-white rounded-2xl shadow p-6">
-          <div className="text-sm text-gray-500">
-            👤 Yetkili
+        {/* MÜŞTERİ BİLGİLERİ */}
+        <section className="bg-white rounded-2xl border shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">
+              🏢
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold">
+                Müşteri Bilgileri
+              </h2>
+
+              <p className="text-sm text-gray-500">
+                Kayıtlı iletişim bilgileri
+              </p>
+            </div>
           </div>
 
-          <div className="text-xl font-bold mt-2">
-            {customer.contact || "-"}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div>
+              <div className="text-sm text-gray-500">
+                Yetkili Kişi
+              </div>
+              <div className="font-semibold mt-1">
+                {customer.contact || "-"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm text-gray-500">
+                Telefon
+              </div>
+              <div className="font-semibold mt-1">
+                {customer.phone || "-"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm text-gray-500">
+                E-posta
+              </div>
+              <div className="font-semibold mt-1 break-all">
+                {customer.email || "-"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm text-gray-500">
+                Adres
+              </div>
+              <div className="font-semibold mt-1">
+                {customer.address || "-"}
+              </div>
+            </div>
           </div>
 
-          <div className="mt-5 text-sm text-gray-500">
-            📞 Telefon
+          {customer.notes && (
+            <div className="mt-5 border-t pt-4">
+              <div className="text-sm text-gray-500 mb-1">
+                Notlar
+              </div>
+
+              <p className="text-gray-700 whitespace-pre-wrap">
+                {customer.notes}
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* İSTATİSTİKLER */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl border p-5 shadow-sm">
+            <div className="text-sm text-gray-500">
+              Toplam İş
+            </div>
+            <div className="text-3xl font-bold mt-2">
+              {totalJobs}
+            </div>
           </div>
 
-          <div className="font-semibold">
-            {customer.phone || "-"}
+          <div className="bg-white rounded-2xl border p-5 shadow-sm">
+            <div className="text-sm text-gray-500">
+              Aktif İş
+            </div>
+            <div className="text-3xl font-bold text-blue-600 mt-2">
+              {activeJobs.length}
+            </div>
           </div>
 
-          <div className="mt-5 text-sm text-gray-500">
-            ✉️ E-Posta
+          <div className="bg-white rounded-2xl border p-5 shadow-sm">
+            <div className="text-sm text-gray-500">
+              Tamamlanan
+            </div>
+            <div className="text-3xl font-bold text-green-600 mt-2">
+              {completedJobs.length}
+            </div>
           </div>
 
-          <div className="font-semibold break-all">
-            {customer.email || "-"}
+          <div className="bg-white rounded-2xl border p-5 shadow-sm">
+            <div className="text-sm text-gray-500">
+              Geciken İş
+            </div>
+            <div className="text-3xl font-bold text-red-600 mt-2">
+              {overdueJobs.length}
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="bg-white rounded-2xl shadow p-6">
-          <div className="text-gray-500">
-            Toplam İş
-          </div>
+        {/* İŞ LİSTESİ */}
+        <section className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-6 border-b">
+            <div>
+              <h2 className="text-xl font-bold">
+                Müşterinin İşleri
+              </h2>
 
-          <div className="text-5xl font-bold text-blue-600 mt-3">
-            {totalJobs}
-          </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Bu müşteriye ait tüm iş kayıtları
+              </p>
+            </div>
 
-          <div className="mt-6 flex justify-between">
-            <span className="text-gray-500">
-              Aktif
+            <span className="bg-blue-100 text-blue-700 rounded-lg px-3 py-2 text-sm font-semibold">
+              {totalJobs} İş
             </span>
-
-            <span className="font-bold">
-              {activeJobs}
-            </span>
           </div>
 
-          <div className="mt-2 flex justify-between">
-            <span className="text-gray-500">
-              Teslim
-            </span>
+          {totalJobs === 0 ? (
+            <div className="p-16 text-center">
+              <div className="text-5xl mb-4">📦</div>
 
-            <span className="font-bold">
-              {completedJobs}
-            </span>
-          </div>
-        </div>
+              <h3 className="text-xl font-bold">
+                Henüz iş bulunmuyor
+              </h3>
 
-        <div className="bg-white rounded-2xl shadow p-6">
-          <div className="text-gray-500">
-            Son Teslim
-          </div>
+              <p className="text-gray-500 mt-2">
+                Bu müşteri için henüz iş oluşturulmamış.
+              </p>
 
-          <div className="text-xl font-bold mt-3">
-            {lastDelivery?.deliveryDate
-              ? new Date(lastDelivery.deliveryDate).toLocaleDateString("tr-TR")
-              : "-"}
-          </div>
-
-          <div className="mt-6 text-gray-500">
-            Son İş
-          </div>
-
-          <div className="font-semibold mt-2">
-            {lastDelivery?.title || "-"}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow p-6 lg:col-span-3">
-          <h3 className="text-xl font-bold mb-6">
-            Üretim Durumu
-          </h3>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="rounded-xl bg-yellow-50 p-4 text-center">
-              <div className="text-sm text-gray-500">Bekliyor</div>
-              <div className="text-3xl font-bold text-yellow-600">{waitingJobs}</div>
+              <Link
+                href="/jobs/new"
+                className="inline-block mt-5 bg-blue-600 text-white rounded-xl px-5 py-3 hover:bg-blue-700"
+              >
+                İlk İşi Oluştur
+              </Link>
             </div>
+          ) : (
+            <>
+              {/* MASAÜSTÜ TABLO */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="p-4 text-left">İş No</th>
+                      <th className="p-4 text-left">İş Adı</th>
+                      <th className="p-4 text-left">Öncelik</th>
+                      <th className="p-4 text-left">Üretim İlerlemesi</th>
+                      <th className="p-4 text-left">Teslim Tarihi</th>
+                      <th className="p-4 text-left">Durum</th>
+                      <th className="p-4 text-right">İşlem</th>
+                    </tr>
+                  </thead>
 
-            <div className="rounded-xl bg-blue-50 p-4 text-center">
-              <div className="text-sm text-gray-500">Tasarım</div>
-              <div className="text-3xl font-bold text-blue-600">{designJobs}</div>
-            </div>
+                  <tbody className="divide-y">
+                    {customer.jobs.map((job) => {
+                      const progress = getJobProgress(job);
 
-            <div className="rounded-xl bg-purple-50 p-4 text-center">
-              <div className="text-sm text-gray-500">Baskı</div>
-              <div className="text-3xl font-bold text-purple-600">{printJobs}</div>
-            </div>
+                      const currentStep =
+                        job.productionSteps.find(
+                          (step) =>
+                            step.status !== "TAMAMLANDI" &&
+                            step.status !== "IPTAL"
+                        );
 
-            <div className="rounded-xl bg-orange-50 p-4 text-center">
-              <div className="text-sm text-gray-500">Kesim</div>
-              <div className="text-3xl font-bold text-orange-600">{cuttingJobs}</div>
-            </div>
+                      return (
+                        <tr
+                          key={job.id}
+                          className="hover:bg-gray-50"
+                        >
+                          <td className="p-4 font-bold">
+                            {job.jobNo}
+                          </td>
 
-            <div className="rounded-xl bg-green-50 p-4 text-center">
-              <div className="text-sm text-gray-500">Montaj</div>
-              <div className="text-3xl font-bold text-green-600">{assemblyJobs}</div>
-            </div>
+                          <td className="p-4 font-medium">
+                            {job.title}
+                          </td>
 
-            <div className="rounded-xl bg-gray-100 p-4 text-center">
-              <div className="text-sm text-gray-500">Teslim</div>
-              <div className="text-3xl font-bold">{completedJobs}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+                          <td className="p-4">
+                            <span
+                              className={`rounded-lg px-3 py-1 text-xs font-medium ${getPriorityColor(job.priority)}`}
+                            >
+                              {getPriorityText(job.priority)}
+                            </span>
+                          </td>
 
-      <div className="bg-white rounded-2xl shadow mt-10 overflow-hidden">
-        <div className="p-6 border-b">
-          <h2 className="text-2xl font-bold">
-            Bu Firmaya Ait İşler
-          </h2>
-        </div>
-
-        {customer.jobs.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            Bu müşteriye ait iş bulunmuyor.
-          </div>
-        ) : (
-          <>
-            <div className="hidden lg:block">
-              <table className="w-full">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="text-left p-4">
-                      İş No
-                    </th>
-
-                    <th className="text-left p-4">
-                      Başlık
-                    </th>
-
-                    <th className="text-left p-4">
-                      Öncelik
-                    </th>
-
-                    <th className="text-left p-4">
-                      İlerleme
-                    </th>
-
-                    <th className="text-left p-4">
-                      Teslim
-                    </th>
-
-                    <th className="text-right p-4">
-                      İşlem
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {customer.jobs.map((job) => {
-                    const progress = getJobProgress(job);
-                    const currentStep = job.productionSteps.find(
-                      (step) =>
-                        step.status !== ProductionStepStatus.TAMAMLANDI
-                    );
-
-                    return (
-                      <tr
-                        key={job.id}
-                        className="border-t hover:bg-gray-50 transition"
-                      >
-                        <td className="p-4 font-semibold">
-                          {job.jobNo}
-                        </td>
-
-                        <td className="p-4">
-                          {job.title}
-                        </td>
-
-                        <td className="p-4">
-                          <span
-                            className={`rounded-lg px-3 py-1 text-sm font-medium ${getPriorityColor(job.priority)}`}
-                          >
-                            {getPriorityText(job.priority)}
-                          </span>
-                        </td>
-
-                        <td className="p-4">
-                          <div className="w-48">
+                          <td className="p-4 min-w-52">
                             <div className="flex justify-between text-xs mb-1">
                               <span>
                                 {progress.completed}/{progress.total}
@@ -392,107 +369,132 @@ export default async function CustomerDetailPage({
                               {progress.total === 0
                                 ? "Henüz üretim planı yok"
                                 : progress.percent === 100
-                                ? "Tamamlandı"
-                                : currentStep?.station.name || "-"}
+                                  ? "Tamamlandı"
+                                  : currentStep?.station.name || "-"}
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        <td className="p-4">
-                          {job.deliveryDate
-                            ? new Date(job.deliveryDate).toLocaleDateString("tr-TR")
-                            : "-"}
-                        </td>
+                          <td className="p-4">
+                            {formatDate(job.deliveryDate)}
+                          </td>
 
-                        <td className="p-4 text-right">
-                          <Link
-                            href={`/jobs/${job.id}`}
-                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                          >
-                            Görüntüle
-                          </Link>
-                        </td>
-                      </tr>
+                          <td className="p-4">
+                            {job.isArchived ? (
+                              <span className="text-gray-500 bg-gray-100 rounded-lg px-3 py-1 text-xs">
+                                Arşiv
+                              </span>
+                            ) : (
+                              <span className="text-green-700 bg-green-100 rounded-lg px-3 py-1 text-xs">
+                                Aktif
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-4 text-right">
+                            <Link
+                              href={`/jobs/${job.id}`}
+                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                            >
+                              Görüntüle
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBİL KARTLAR */}
+              <div className="lg:hidden p-4 space-y-4">
+                {customer.jobs.map((job) => {
+                  const progress = getJobProgress(job);
+
+                  const currentStep =
+                    job.productionSteps.find(
+                      (step) =>
+                        step.status !== "TAMAMLANDI" &&
+                        step.status !== "IPTAL"
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
 
-            <div className="lg:hidden p-4 space-y-4">
-              {customer.jobs.map((job) => {
-                const progress = getJobProgress(job);
-                const currentStep = job.productionSteps.find(
-                  (step) =>
-                    step.status !== ProductionStepStatus.TAMAMLANDI
-                );
+                  return (
+                    <Link
+                      key={job.id}
+                      href={`/jobs/${job.id}`}
+                      className="block rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-bold text-lg">
+                          {job.jobNo}
+                        </div>
 
-                return (
-                  <Link
-                    key={job.id}
-                    href={`/jobs/${job.id}`}
-                    className="block rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-bold text-lg">
-                        {job.jobNo}
-                      </div>
-
-                      <span
-                        className={`rounded-lg px-3 py-1 text-xs font-medium ${getPriorityColor(job.priority)}`}
-                      >
-                        {getPriorityText(job.priority)}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 text-xl font-semibold">
-                      {job.title}
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>
-                          {progress.completed}/{progress.total}
-                        </span>
-
-                        <span>
-                          %{progress.percent}
+                        <span
+                          className={`rounded-lg px-3 py-1 text-xs font-medium ${getPriorityColor(job.priority)}`}
+                        >
+                          {getPriorityText(job.priority)}
                         </span>
                       </div>
 
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-600"
-                          style={{
-                            width: `${progress.percent}%`,
-                          }}
-                        />
+                      <div className="mt-4 text-xl font-semibold">
+                        {job.title}
                       </div>
 
-                      <div className="mt-2 text-sm text-gray-500">
-                        {progress.total === 0
-                          ? "Henüz üretim planı yok"
-                          : progress.percent === 100
-                          ? "Tamamlandı"
-                          : currentStep?.station.name || "-"}
-                      </div>
-                    </div>
+                      <div className="mt-4">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>
+                            {progress.completed}/{progress.total}
+                          </span>
 
-                    <div className="mt-5 text-sm text-gray-500">
-                      Teslim Tarihi
+                          <span>
+                            %{progress.percent}
+                          </span>
+                        </div>
 
-                      <div className="mt-1 font-medium text-black">
-                        {job.deliveryDate
-                          ? new Date(job.deliveryDate).toLocaleDateString("tr-TR")
-                          : "-"}
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-green-600"
+                            style={{
+                              width: `${progress.percent}%`,
+                            }}
+                          />
+                        </div>
+
+                        <div className="mt-2 text-sm text-gray-500">
+                          {progress.total === 0
+                            ? "Henüz üretim planı yok"
+                            : progress.percent === 100
+                              ? "Tamamlandı"
+                              : currentStep?.station.name || "-"}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </>
-        )}
+
+                      <div className="mt-5 flex justify-between text-sm">
+                        <span className="text-gray-500">
+                          Teslim Tarihi
+                        </span>
+
+                        <span className="font-medium text-gray-900">
+                          {formatDate(job.deliveryDate)}
+                        </span>
+                      </div>
+
+                      {job.isArchived && (
+                        <div className="mt-3 text-xs text-gray-500">
+                          Arşivlenmiş iş
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* ALT BİLGİ */}
+        <div className="text-sm text-gray-400 text-center">
+          COPY PASTE İş Takip Sistemi
+        </div>
       </div>
     </main>
   );

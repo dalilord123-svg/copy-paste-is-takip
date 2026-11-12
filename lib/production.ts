@@ -1,3 +1,4 @@
+
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -8,10 +9,46 @@ export type ProductionFilters = {
   status?: string;
 };
 
+const STEP_STATUSES = [
+  "BEKLIYOR",
+  "HAZIR",
+  "DEVAM_EDIYOR",
+  "BEKLEMEDE",
+  "TAMAMLANDI",
+  "IPTAL",
+] as const;
+
 export async function getProductionData(
   filters: ProductionFilters = {}
 ) {
   const { q, station, employee, status } = filters;
+
+  const stepWhere: Prisma.ProductionStepWhereInput = {
+    ...(station && {
+      stationId: station,
+    }),
+
+    ...(employee && {
+      assignments: {
+        some: {
+          employeeId: employee,
+        },
+      },
+    }),
+
+    ...(status &&
+      STEP_STATUSES.includes(
+        status as (typeof STEP_STATUSES)[number]
+      ) && {
+        status: status as (typeof STEP_STATUSES)[number],
+      }),
+  };
+
+  const hasStepFilters = Boolean(
+    station || employee || (status && STEP_STATUSES.includes(
+      status as (typeof STEP_STATUSES)[number]
+    ))
+  );
 
   const where: Prisma.JobWhereInput = {
     isArchived: false,
@@ -41,27 +78,9 @@ export async function getProductionData(
       ],
     }),
 
-    ...(station && {
+    ...(hasStepFilters && {
       productionSteps: {
-        some: {
-          stationId: station,
-        },
-      },
-    }),
-
-    ...(employee && {
-      productionSteps: {
-        some: {
-          employeeId: employee,
-        },
-      },
-    }),
-
-    ...(status && {
-      productionSteps: {
-        some: {
-          status: status as any,
-        },
+        some: stepWhere,
       },
     }),
   };
@@ -83,7 +102,11 @@ export async function getProductionData(
         productionSteps: {
           include: {
             station: true,
-            employee: true,
+            assignments: {
+              include: {
+                employee: true,
+              },
+            },
           },
           orderBy: {
             stepOrder: "asc",

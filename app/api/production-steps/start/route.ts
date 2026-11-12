@@ -1,22 +1,15 @@
+
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import {
   JobStatus,
   ProductionStepStatus,
   EmployeeRole,
 } from "@prisma/client";
+
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/getCurrentUser";
 
-type Props = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
-export async function POST(
-  req: NextRequest,
-  { params }: Props
-) {
+export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
 
@@ -30,7 +23,34 @@ export async function POST(
       );
     }
 
-    const { id } = await params;
+    // ID bilgisini önce URL'den, ardından istek gövdesinden al.
+    const url = new URL(req.url);
+    let body: Record<string, unknown> = {};
+
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+
+    const id =
+      url.searchParams.get("id") ||
+      url.searchParams.get("stepId") ||
+      (typeof body.id === "string" ? body.id : null) ||
+      (typeof body.stepId === "string" ? body.stepId : null) ||
+      (typeof body.productionStepId === "string"
+        ? body.productionStepId
+        : null);
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Üretim adımı ID bilgisi gönderilmedi.",
+        },
+        { status: 400 }
+      );
+    }
 
     const step = await prisma.productionStep.findUnique({
       where: { id },
@@ -110,14 +130,12 @@ export async function POST(
         data: {
           status: ProductionStepStatus.DEVAM_EDIYOR,
           startedAt: currentStep.startedAt ?? now,
-          progress:
-            currentStep.progress === 0 ? 1 : currentStep.progress,
+          progress: currentStep.progress === 0 ? 1 : currentStep.progress,
           waitingReason: null,
           waitingNote: null,
         },
       });
 
-      // Başlatan personelin atama kaydını güncelle.
       if (userAssignment) {
         await tx.productionAssignment.update({
           where: {
@@ -149,9 +167,12 @@ export async function POST(
       });
     });
 
-    return NextResponse.redirect(
-      new URL(`/mobile/jobs/${step.jobId}`, req.url)
-    );
+    return NextResponse.json({
+      success: true,
+      message: "Üretim aşaması başlatıldı.",
+      jobId: step.jobId,
+      productionStepId: id,
+    });
   } catch (error) {
     console.error("START PRODUCTION STEP ERROR:", error);
 

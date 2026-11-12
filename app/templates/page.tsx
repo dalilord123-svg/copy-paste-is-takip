@@ -1,148 +1,125 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/getCurrentUser";
 
 export default async function TemplatesPage() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
 
   const templates = await prisma.template.findMany({
-
     include: {
-      steps: true,
+      steps: {
+        include: {
+          station: true,
+        },
+        orderBy: {
+          stepOrder: "asc",
+        },
+      },
+      jobs: true,
     },
-
     orderBy: {
-      createdAt: "desc",
+      name: "asc",
     },
-
   });
 
   return (
-
-    <main className="max-w-7xl mx-auto p-6">
+    <main className="max-w-7xl mx-auto p-8">
 
       <div className="flex items-center justify-between mb-8">
 
         <div>
-
           <h1 className="text-3xl font-bold">
             Şablonlar
           </h1>
 
           <p className="text-gray-500 mt-2">
-            İş oluştururken kullanılacak üretim şablonları
+            Toplam {templates.length} şablon
           </p>
-
         </div>
 
         <Link
           href="/templates/new"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl"
         >
           + Yeni Şablon
         </Link>
 
       </div>
 
-      <div className="grid gap-6">
+      {templates.length === 0 ? (
 
-        {templates.length === 0 && (
+        <div className="bg-white border rounded-xl p-10 text-center">
+          Henüz şablon oluşturulmadı.
+        </div>
 
-          <div className="bg-white rounded-2xl shadow p-12 text-center text-gray-500">
+      ) : (
 
-            Henüz şablon oluşturulmadı.
+        <div className="grid gap-6">
 
-          </div>
+          {templates.map((template) => (
 
-        )}
+            <Link
+              key={template.id}
+              href={`/templates/${template.id}`}
+              className="bg-white border rounded-xl p-6 hover:border-blue-500 transition"
+            >
 
-        {templates.map((template) => (          <div
-            key={template.id}
-            className="bg-white rounded-2xl shadow hover:shadow-lg transition p-6"
-          >
+              <div className="flex justify-between">
 
-            <div className="flex items-center justify-between">
+                <div>
 
-              <div>
+                  <h2 className="text-xl font-bold">
+                    {template.name}
+                  </h2>
 
-                <h2 className="text-2xl font-semibold">
-                  {template.name}
-                </h2>
-
-                {template.description && (
                   <p className="text-gray-500 mt-2">
                     {template.description}
                   </p>
-                )}
 
-              </div>
-
-              <div className="text-right">
-
-                <div className="text-3xl font-bold text-blue-600">
-                  {template.steps.length}
                 </div>
 
-                <div className="text-sm text-gray-500">
-                  Adım
+                <div className="text-right">
+
+                  <div className="font-semibold">
+                    {template.steps.length} İstasyon
+                  </div>
+
+                  <div className="text-sm text-gray-500">
+                    {template.jobs.length} İşte Kullanıldı
+                  </div>
+
                 </div>
 
               </div>
 
-            </div>
+              <div className="flex flex-wrap gap-2 mt-6">
 
-            <div className="mt-6 flex items-center justify-between">
+                {template.steps.map((step) => (
 
-              <div className="text-sm text-gray-500">
+                  <span
+                    key={step.id}
+                    className="bg-gray-100 px-3 py-1 rounded-full text-sm"
+                  >
+                    {step.stepOrder}. {step.station.name}
+                  </span>
 
-                Oluşturulma:
-
-                {" "}
-
-                {template.createdAt.toLocaleDateString("tr-TR")}
-
-              </div>
-
-              <div className="flex gap-3"></div>                <Link
-                  href={`/templates/${template.id}/edit`}
-                  className="px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white transition"
-                >
-                  Düzenle
-                </Link>
-
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition"
-                  onClick={() => {
-                    alert("Şablon kopyalama yakında eklenecek.");
-                  }}
-                >
-                  Kopyala
-                </button>
-
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition"
-                  onClick={() => {
-                    if (
-                      confirm(
-                        `"${template.name}" şablonunu silmek istiyor musunuz?`
-                      )
-                    ) {
-                      window.location.href = `/api/templates/${template.id}/delete`;
-                    }
-                  }}
-                >
-                  Sil
-                </button>
+                ))}
 
               </div>
 
-            </div>
+            </Link>
 
-          </div>        ))}
+          ))}
 
-      </div>
+        </div>
+
+      )}
 
     </main>
-
   );
 }

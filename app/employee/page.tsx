@@ -2,7 +2,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ProductionStepStatus } from "@prisma/client";
-import EmployeeTable from "@/app/components/employees/EmployeeTable";
+import EmployeeTable from "@/app/components/employee/EmployeeTable";
 
 export default async function EmployeesPage() {
   const employees = await prisma.employee.findMany({

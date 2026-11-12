@@ -1,5 +1,13 @@
+
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+
+const ACTIVE_STATUSES = [
+  "BEKLIYOR",
+  "HAZIR",
+  "DEVAM_EDIYOR",
+  "BEKLEMEDE",
+] as const;
 
 export default async function EmployeeStatus() {
   const employees = await prisma.employee.findMany({
@@ -7,15 +15,22 @@ export default async function EmployeeStatus() {
       isActive: true,
     },
     include: {
-      productionSteps: {
+      assignments: {
+        where: {
+          productionStep: {
+            status: {
+              in: [...ACTIVE_STATUSES],
+            },
+          },
+        },
+        include: {
+          productionStep: true,
+        },
+      },
+      leadingSteps: {
         where: {
           status: {
-            in: [
-              "BEKLIYOR",
-              "HAZIR",
-              "DEVAM_EDIYOR",
-              "BEKLEMEDE",
-            ],
+            in: [...ACTIVE_STATUSES],
           },
         },
       },
@@ -27,9 +42,7 @@ export default async function EmployeeStatus() {
 
   return (
     <div className="bg-white rounded-2xl shadow">
-
       <div className="flex items-center justify-between border-b p-6">
-
         <h2 className="text-2xl font-bold">
           Personel Durumu
         </h2>
@@ -40,22 +53,23 @@ export default async function EmployeeStatus() {
         >
           Tüm Personeller
         </Link>
-
       </div>
 
       {employees.length === 0 ? (
-
         <div className="p-8 text-center text-gray-500">
           Personel bulunamadı.
         </div>
-
       ) : (
-
         <div className="divide-y">
-
           {employees.map((employee) => {
+            const activeStepIds = new Set([
+              ...employee.assignments.map(
+                (assignment) => assignment.productionStep.id
+              ),
+              ...employee.leadingSteps.map((step) => step.id),
+            ]);
 
-            const activeJobs = employee.productionSteps.length;
+            const activeJobs = activeStepIds.size;
 
             let statusColor = "bg-green-500";
             let statusText = "Müsait";
@@ -69,14 +83,11 @@ export default async function EmployeeStatus() {
             }
 
             return (
-
               <div
                 key={employee.id}
                 className="flex items-center justify-between p-5 hover:bg-slate-50"
               >
-
                 <div>
-
                   <div className="font-bold">
                     {employee.name}
                   </div>
@@ -84,13 +95,10 @@ export default async function EmployeeStatus() {
                   <div className="text-sm text-gray-500">
                     {employee.role}
                   </div>
-
                 </div>
 
                 <div className="flex items-center gap-4">
-
                   <div className="text-center">
-
                     <div className="text-xl font-bold text-blue-600">
                       {activeJobs}
                     </div>
@@ -98,26 +106,18 @@ export default async function EmployeeStatus() {
                     <div className="text-xs text-gray-500">
                       Aktif İş
                     </div>
-
                   </div>
 
                   <div
                     className={`w-3 h-3 rounded-full ${statusColor}`}
                     title={statusText}
                   />
-
                 </div>
-
               </div>
-
             );
-
           })}
-
         </div>
-
       )}
-
     </div>
   );
 }

@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { generateToken } from "@/lib/auth";
+import { signToken } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { username, password } = body;
+    const username =
+      typeof body.username === "string"
+        ? body.username.trim()
+        : "";
+
+    const password =
+      typeof body.password === "string"
+        ? body.password
+        : "";
 
     if (!username || !password) {
       return NextResponse.json(
@@ -20,28 +28,16 @@ export async function POST(request: NextRequest) {
     }
 
     const employee = await prisma.employee.findUnique({
-      where: {
-        username,
-      },
+      where: { username },
     });
 
-    if (!employee) {
+    if (!employee || !employee.isActive) {
       return NextResponse.json(
         {
           success: false,
           error: "Kullanıcı adı veya şifre hatalı.",
         },
         { status: 401 }
-      );
-    }
-
-    if (!employee.isActive) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Bu kullanıcı pasif durumdadır.",
-        },
-        { status: 403 }
       );
     }
 
@@ -60,23 +56,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await prisma.employee.update({
-      where: {
-        id: employee.id,
-      },
-      data: {
-        lastLogin: new Date(),
-      },
-    });
-
-    const token = generateToken({
-      employeeId: employee.id,
+    const token = signToken({
+      id: employee.id,
       username: employee.username,
       role: employee.role,
     });
 
     const response = NextResponse.json({
       success: true,
+      message: "Giriş başarılı.",
       employee: {
         id: employee.id,
         name: employee.name,
@@ -92,7 +80,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 30,
     });
 
     return response;
@@ -104,9 +92,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: "Sunucu hatası oluştu.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

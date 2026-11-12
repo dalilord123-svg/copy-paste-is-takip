@@ -1,4 +1,4 @@
-```tsx
+
 export default function ProductionHeader() {
   const today = new Date().toLocaleDateString("tr-TR", {
     weekday: "long",
@@ -37,4 +37,3 @@ export default function ProductionHeader() {
     </div>
   );
 }
-```

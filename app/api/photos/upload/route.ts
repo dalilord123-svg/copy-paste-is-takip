@@ -17,10 +17,7 @@ export async function POST(req: NextRequest) {
 
     if (!employee) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Oturum açmanız gerekiyor.",
-        },
+        { success: false, message: "Oturum açmanız gerekiyor." },
         { status: 401 }
       );
     }
@@ -39,29 +36,19 @@ export async function POST(req: NextRequest) {
       !(file instanceof File)
     ) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Eksik veya geçersiz bilgi.",
-        },
+        { success: false, message: "Eksik veya geçersiz bilgi." },
         { status: 400 }
       );
     }
 
     if (file.size <= 0) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Boş dosya yüklenemez.",
-        },
+        { success: false, message: "Boş dosya yüklenemez." },
         { status: 400 }
       );
     }
 
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ];
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
@@ -73,49 +60,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const maxFileSize = 10 * 1024 * 1024;
-
-    if (file.size > maxFileSize) {
+    if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Fotoğraf boyutu en fazla 10 MB olabilir.",
-        },
+        { success: false, message: "Fotoğraf boyutu en fazla 10 MB olabilir." },
         { status: 400 }
       );
     }
 
     const productionStep = await prisma.productionStep.findUnique({
-      where: {
-        id: productionStepId,
-      },
+      where: { id: productionStepId },
       include: {
         job: true,
         station: true,
         assignments: {
-          select: {
-            employeeId: true,
-          },
+          select: { employeeId: true },
         },
       },
     });
 
     if (!productionStep || productionStep.jobId !== jobId) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "İş veya üretim aşaması bulunamadı.",
-        },
+        { success: false, message: "İş veya üretim aşaması bulunamadı." },
         { status: 404 }
       );
     }
 
     if (productionStep.job.isArchived) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Arşivlenmiş işe fotoğraf yüklenemez.",
-        },
+        { success: false, message: "Arşivlenmiş işe fotoğraf yüklenemez." },
         { status: 400 }
       );
     }
@@ -158,9 +130,7 @@ export async function POST(req: NextRequest) {
     const isJpeg =
       file.type === "image/jpeg" &&
       buffer.length >= 3 &&
-      buffer.subarray(0, 3).equals(
-        Buffer.from([0xff, 0xd8, 0xff])
-      );
+      buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
 
     const isPng =
       file.type === "image/png" &&
@@ -180,10 +150,7 @@ export async function POST(req: NextRequest) {
 
     if (!isJpeg && !isPng && !isWebp) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Yüklenen dosya geçerli bir fotoğraf değil.",
-        },
+        { success: false, message: "Yüklenen dosya geçerli bir fotoğraf değil." },
         { status: 400 }
       );
     }
@@ -194,18 +161,11 @@ export async function POST(req: NextRequest) {
       "image/webp": ".webp",
     };
 
-    const extension = extensionByType[file.type];
-    const fileName = `${randomUUID()}${extension}`;
+    const fileName = `${randomUUID()}${extensionByType[file.type]}`;
 
-    const uploadDir = path.join(
-      process.cwd(),
-      "public",
-      "uploads"
-    );
+    const uploadDir = path.join(process.cwd(), "public", "uploads");
 
-    await mkdir(uploadDir, {
-      recursive: true,
-    });
+    await mkdir(uploadDir, { recursive: true });
 
     savedFilePath = path.join(uploadDir, fileName);
 
@@ -226,13 +186,9 @@ export async function POST(req: NextRequest) {
       });
 
       await tx.productionStep.update({
-        where: {
-          id: productionStepId,
-        },
+        where: { id: productionStepId },
         data: {
-          photoCount: {
-            increment: 1,
-          },
+          photoCount: { increment: 1 },
         },
       });
 
@@ -248,9 +204,10 @@ export async function POST(req: NextRequest) {
 
     savedFilePath = null;
 
-    return NextResponse.redirect(
-      new URL(`/mobile/jobs/${productionStepId}`, req.url)
-    );
+    return NextResponse.json({
+      success: true,
+      message: "Fotoğraf başarıyla yüklendi.",
+    });
   } catch (error) {
     if (savedFilePath) {
       try {
@@ -263,10 +220,7 @@ export async function POST(req: NextRequest) {
     console.error("FOTOĞRAF YÜKLEME HATASI:", error);
 
     return NextResponse.json(
-      {
-        success: false,
-        message: "Fotoğraf yüklenemedi.",
-      },
+      { success: false, message: "Fotoğraf yüklenemedi." },
       { status: 500 }
     );
   }

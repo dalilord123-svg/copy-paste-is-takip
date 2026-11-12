@@ -1,4 +1,3 @@
-
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -20,12 +19,12 @@ export default async function JobsPage() {
       productionSteps: {
         include: {
           station: true,
-          leader: true,
           assignments: {
             include: {
               employee: true,
             },
           },
+          photos: true,
         },
         orderBy: {
           stepOrder: "asc",
@@ -104,8 +103,8 @@ export default async function JobsPage() {
                       step.status === "TAMAMLANDI"
                         ? "bg-green-100 text-green-700"
                         : step.status === "DEVAM_EDIYOR"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-700"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-700"
                     }`}
                   >
                     {step.station.name}

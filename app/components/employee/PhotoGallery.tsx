@@ -1,98 +1,81 @@
+
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-
-type Photo = {
+type JobPhoto = {
   id: string;
-  filePath: string;
   originalName: string;
+  filePath: string;
+  fileType: string;
   uploadedAt: Date | string;
 };
 
 type Props = {
-  photos: Photo[];
+  photos: JobPhoto[];
 };
 
-export default function PhotoGallery({
-  photos,
-}: Props) {
-  const router = useRouter();
+export default function PhotoGallery({ photos }: Props) {
+  if (!photos || photos.length === 0) {
+    return (
+      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-xl font-bold text-gray-900">
+          📷 İş Fotoğrafları
+        </h2>
 
-  const [selected, setSelected] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function deletePhoto(id: string) {
-    if (!confirm("Fotoğraf silinsin mi?")) return;
-
-    setLoading(true);
-
-    const res = await fetch(`/api/photos/${id}`, {
-      method: "DELETE",
-    });
-
-    if (res.ok) {
-      router.refresh();
-    }
-
-    setLoading(false);
+        <div className="rounded-lg bg-gray-50 p-8 text-center">
+          <div className="mb-2 text-4xl">🖼️</div>
+          <p className="font-medium text-gray-700">
+            Henüz fotoğraf yüklenmemiş.
+          </p>
+          <p className="mt-1 text-sm text-gray-500">
+            Yüklenen fotoğraflar burada görüntülenecek.
+          </p>
+        </div>
+      </section>
+    );
   }
 
   return (
-    <>
-      <div className="bg-white rounded-xl shadow p-5 mt-6">
-        <h2 className="text-xl font-bold mb-4">
-          Fotoğraflar ({photos.length})
+    <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-900">
+          📷 İş Fotoğrafları
         </h2>
 
-        {photos.length === 0 ? (
-          <div className="text-gray-500">
-            Henüz fotoğraf yüklenmedi.
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {photos.map((photo) => (
-              <div
-                key={photo.id}
-                className="border rounded-xl overflow-hidden shadow-sm"
-              >
-                <img
-                  src={photo.filePath}
-                  alt={photo.originalName}
-                  className="w-full h-40 object-cover cursor-pointer hover:opacity-90"
-                  onClick={() => setSelected(photo.filePath)}
-                />
-
-                <div className="p-3">
-                  <div className="text-xs truncate">
-                    {photo.originalName}
-                  </div>
-
-                  <button
-                    disabled={loading}
-                    onClick={() => deletePhoto(photo.id)}
-                    className="mt-3 w-full rounded-lg bg-red-600 hover:bg-red-700 text-white py-2"
-                  >
-                    🗑 Sil
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <span className="rounded-lg bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
+          {photos.length} Fotoğraf
+        </span>
       </div>
 
-      {selected && (
-        <div
-          onClick={() => setSelected(null)}
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-        >
-          <img
-            src={selected}
-            className="max-h-[90vh] max-w-[90vw] rounded-xl"
-          />
-        </div>
-      )}
-    </>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {photos.map((photo) => (
+          <a
+            key={photo.id}
+            href={photo.filePath}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+            title={photo.originalName}
+          >
+            <div className="aspect-square overflow-hidden">
+              <img
+                src={photo.filePath}
+                alt={photo.originalName}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            </div>
+
+            <div className="p-2">
+              <p className="truncate text-xs font-medium text-gray-700">
+                {photo.originalName}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                {new Date(photo.uploadedAt).toLocaleDateString("tr-TR")}
+              </p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }

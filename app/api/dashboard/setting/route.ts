@@ -4,69 +4,113 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 
 export async function GET() {
-  const cookieStore = await cookies();
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("employee_token")?.value;
 
-  const token = cookieStore.get("employee_token")?.value;
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Oturum açmanız gerekiyor." },
+        { status: 401 }
+      );
+    }
 
-  if (!token)
-    return NextResponse.json(
-      { success: false },
-      { status: 401 }
-    );
+    const payload = verifyToken(token);
 
-  const payload = verifyToken(token);
+    if (!payload) {
+      return NextResponse.json(
+        { success: false, message: "Oturum geçersiz." },
+        { status: 401 }
+      );
+    }
 
-  if (!payload)
-    return NextResponse.json(
-      { success: false },
-      { status: 401 }
-    );
-
-  let settings = await prisma.dashboardSetting.findUnique({
-    where: {
-      employeeId: payload.employeeId,
-    },
-  });
-
-  if (!settings) {
-    settings = await prisma.dashboardSetting.create({
-      data: {
-        employeeId: payload.employeeId,
+    let settings = await prisma.dashboardSetting.findUnique({
+      where: {
+        employeeId: payload.id,
       },
     });
-  }
 
-  return NextResponse.json(settings);
+    if (!settings) {
+      settings = await prisma.dashboardSetting.create({
+        data: {
+          employeeId: payload.id,
+        },
+      });
+    }
+
+    return NextResponse.json(settings);
+  } catch (error) {
+    console.error("DASHBOARD SETTINGS GET ERROR:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Ayarlar alınamadı." },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PUT(request: NextRequest) {
-  const cookieStore = await cookies();
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("employee_token")?.value;
 
-  const token = cookieStore.get("employee_token")?.value;
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Oturum açmanız gerekiyor." },
+        { status: 401 }
+      );
+    }
 
-  if (!token)
-    return NextResponse.json(
-      { success: false },
-      { status: 401 }
-    );
+    const payload = verifyToken(token);
 
-  const payload = verifyToken(token);
+    if (!payload) {
+      return NextResponse.json(
+        { success: false, message: "Oturum geçersiz." },
+        { status: 401 }
+      );
+    }
 
-  if (!payload)
-    return NextResponse.json(
-      { success: false },
-      { status: 401 }
-    );
+    const body = await request.json();
 
-  const body = await request.json();
+    const allowedFields = [
+      "jobs",
+      "production",
+      "employees",
+      "customers",
+      "deliveries",
+      "reports",
+      "photos",
+      "files",
+      "notes",
+      "calendar",
+    ] as const;
 
-  const updated =
-    await prisma.dashboardSetting.update({
+    const data: Partial<Record<(typeof allowedFields)[number], boolean>> = {};
+
+    for (const field of allowedFields) {
+      if (typeof body[field] === "boolean") {
+        data[field] = body[field];
+      }
+    }
+
+    const updated = await prisma.dashboardSetting.upsert({
       where: {
-        employeeId: payload.employeeId,
+        employeeId: payload.id,
       },
-      data: body,
+      update: data,
+      create: {
+        employeeId: payload.id,
+        ...data,
+      },
     });
 
-  return NextResponse.json(updated);
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("DASHBOARD SETTINGS PUT ERROR:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Ayarlar kaydedilemedi." },
+      { status: 500 }
+    );
+  }
 }

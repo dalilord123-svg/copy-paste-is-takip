@@ -17,12 +17,17 @@ export async function PATCH(
     const { id: jobId } = await params;
     const body = await request.json();
 
-    const stepId = body.stepId as string | undefined;
-    const status = body.status as ProductionStepStatus | undefined;
+    const stepId =
+      typeof body.stepId === "string" ? body.stepId : undefined;
+
+    const status =
+      typeof body.status === "string"
+        ? body.status as ProductionStepStatus
+        : undefined;
 
     if (!stepId || !status) {
       return NextResponse.json(
-        { error: "stepId ve status zorunludur." },
+        { success: false, error: "stepId ve status zorunludur." },
         { status: 400 }
       );
     }
@@ -31,7 +36,7 @@ export async function PATCH(
 
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
-        { error: "Geçersiz üretim durumu." },
+        { success: false, error: "Geçersiz üretim durumu." },
         { status: 400 }
       );
     }
@@ -49,7 +54,7 @@ export async function PATCH(
 
     if (!existingStep) {
       return NextResponse.json(
-        { error: "Üretim adımı bulunamadı." },
+        { success: false, error: "Üretim adımı bulunamadı." },
         { status: 404 }
       );
     }
@@ -69,17 +74,7 @@ export async function PATCH(
               ? existingStep.startedAt ?? now
               : undefined,
 
-          finishedAt:
-            status === ProductionStepStatus.TAMAMLANDI
-              ? now
-              : status !== ProductionStepStatus.TAMAMLANDI
-                ? null
-                : undefined,
-
-          progress:
-            status === ProductionStepStatus.TAMAMLANDI
-              ? 100
-              : undefined,
+          finishedAt: null,
         },
         include: {
           station: true,
@@ -112,7 +107,10 @@ export async function PATCH(
     console.error("STATUS UPDATE ERROR:", error);
 
     return NextResponse.json(
-      { error: "Durum güncellenemedi." },
+      {
+        success: false,
+        error: "Durum güncellenemedi.",
+      },
       { status: 500 }
     );
   }

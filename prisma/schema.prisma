@@ -14,246 +14,431 @@ model Customer {
   phone     String?
   email     String?
   address   String?
+  notes     String?
+
+  isActive  Boolean  @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  isActive  Boolean  @default(true)
-  notes     String?
-  jobs      Job[]
+
+  jobs Job[]
 
   @@index([company])
 }
 
 model Employee {
-  id           String                 @id @default(cuid())
-  name         String
-  phone        String?
-  email        String?
-  role         EmployeeRole
-  isActive     Boolean                @default(true)
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  password     String
-  username     String                 @unique
-  dashboard    DashboardSetting?
-  history      JobHistory[]
-  notes        JobNote[]
-  photos       JobPhoto[]
-  assignments  ProductionAssignment[]
-  leadingSteps ProductionStep[]       @relation("StepLeader")
+  id        String   @id @default(cuid())
+  name      String
+  username  String   @unique
+  password  String
+
+  phone     String?
+  email     String?
+
+  role      EmployeeRole
+
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dashboard DashboardSetting?
+
+  assignments ProductionAssignment[]
+
+  leadingJobs Job[] @relation("JobLeader")
+
+  history JobHistory[]
+
+  notes JobNote[]
+
+  photos JobPhoto[]
 
   @@index([name])
   @@index([role])
 }
 
 model DashboardSetting {
-  id         String   @id @default(cuid())
-  employeeId String   @unique
-  jobs       Boolean  @default(true)
-  production Boolean  @default(true)
-  employees  Boolean  @default(true)
-  customers  Boolean  @default(true)
-  deliveries Boolean  @default(true)
-  reports    Boolean  @default(true)
-  photos     Boolean  @default(false)
-  files      Boolean  @default(false)
-  notes      Boolean  @default(false)
-  calendar   Boolean  @default(false)
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  employeeId String @unique
+
+  jobs Boolean @default(true)
+  production Boolean @default(true)
+  employees Boolean @default(true)
+  customers Boolean @default(true)
+  deliveries Boolean @default(true)
+  reports Boolean @default(true)
+
+  photos Boolean @default(false)
+  files Boolean @default(false)
+  notes Boolean @default(false)
+  calendar Boolean @default(false)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 }
 
 model Station {
-  id                String           @id @default(cuid())
-  name              String           @unique
-  icon              String?
-  color             String?
-  sortOrder         Int              @default(0)
-  isActive          Boolean          @default(true)
-  requirePhotoCount Int              @default(0)
-  requireFile       Boolean          @default(false)
-  requireNote       Boolean          @default(false)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  estimatedMinutes  Int              @default(0)
-  productionSteps   ProductionStep[]
-  templateSteps     TemplateStep[]
+  id String @id @default(cuid())
+
+  name String @unique
+
+  icon String?
+
+  color String?
+
+  sortOrder Int @default(0)
+
+  isActive Boolean @default(true)
+
+  allowMultipleEmployees Boolean @default(true)
+
+  requirePhotoCount Int @default(0)
+
+  requireFile Boolean @default(false)
+
+  requireNote Boolean @default(false)
+
+  estimatedMinutes Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  productionSteps ProductionStep[]
+
+  templateSteps TemplateStep[]
 
   @@index([sortOrder])
+
   @@index([isActive])
 }
 
 model Job {
-  id              String           @id @default(cuid())
-  jobNo           String           @unique
-  title           String
-  description     String?
-  width           Float?
-  height          Float?
-  quantity        Int?
-  material        String?
-  machine         String?
-  deliveryDate    DateTime?
-  priority        JobPriority      @default(NORMAL)
-  customerId      String
-  isArchived      Boolean          @default(false)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  status          JobStatus        @default(BEKLIYOR)
-  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  files           JobFile[]
-  history         JobHistory[]
-  notes           JobNote[]
-  photos          JobPhoto[]
+  id String @id @default(cuid())
+
+  jobNo String @unique
+
+  title String
+
+  description String?
+
+  width Float?
+  height Float?
+
+  quantity Int?
+
+  material String?
+
+  machine String?
+
+  deliveryDate DateTime?
+
+  priority JobPriority @default(NORMAL)
+
+  status JobStatus @default(BEKLIYOR)
+
+  progress Int @default(0)
+
+  customerId String
+
+  leaderId String?
+
+  templateId String?
+
+  isArchived Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  leader Employee? @relation("JobLeader", fields: [leaderId], references: [id])
+
+  template Template? @relation(fields: [templateId], references: [id])
+
   productionSteps ProductionStep[]
 
+  files JobFile[]
+
+  photos JobPhoto[]
+
+  notes JobNote[]
+
+  history JobHistory[]
+
   @@index([customerId])
+
+  @@index([leaderId])
+
+  @@index([templateId])
+
   @@index([deliveryDate])
+
   @@index([priority])
+
   @@index([status])
 }
 
 model ProductionStep {
-  id               String                 @id @default(cuid())
-  jobId            String
-  stationId        String
-  stepOrder        Int
-  status           ProductionStepStatus   @default(BEKLIYOR)
-  waitingReason    WaitingReason?
-  waitingNote      String?
+  id String @id @default(cuid())
+
+  jobId String
+
+  stationId String
+
+  stepOrder Int
+
+  status ProductionStepStatus @default(BEKLIYOR)
+
+  waitingReason WaitingReason?
+
+  waitingNote String?
+
   estimatedMinutes Int?
-  actualMinutes    Int?
-  progress         Int                    @default(0)
-  photoCount       Int                    @default(0)
-  fileCount        Int                    @default(0)
-  noteCount        Int                    @default(0)
-  startedAt        DateTime?
-  finishedAt       DateTime?
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  leaderId         String?
 
-  assignments      ProductionAssignment[]
-  photos           JobPhoto[]
+  actualMinutes Int?
 
-  job              Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  leader           Employee?              @relation("StepLeader", fields: [leaderId], references: [id])
-  station          Station                @relation(fields: [stationId], references: [id])
+  progress Int @default(0)
+
+  requirePhotoCount Int @default(0)
+
+  requireFile Boolean @default(false)
+
+  requireNote Boolean @default(false)
+
+  photoCount Int @default(0)
+
+  fileCount Int @default(0)
+
+  noteCount Int @default(0)
+
+  isSkipped Boolean @default(false)
+
+  isLocked Boolean @default(false)
+
+  startedAt DateTime?
+
+  finishedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  station Station @relation(fields: [stationId], references: [id])
+
+  assignments ProductionAssignment[]
+
+  photos JobPhoto[]
+
+  @@unique([jobId, stepOrder])
 
   @@index([jobId])
+
   @@index([stationId])
-  @@index([leaderId])
+
   @@index([status])
+
   @@index([stepOrder])
 }
 
 model ProductionAssignment {
-  id               String               @id @default(cuid())
+  id String @id @default(cuid())
+
   productionStepId String
-  employeeId       String
-  startedAt        DateTime?
-  finishedAt       DateTime?
-  workedMinutes    Int?
-  status           ProductionStepStatus @default(BEKLIYOR)
-  createdAt        DateTime             @default(now())
-  employee         Employee             @relation(fields: [employeeId], references: [id])
-  productionStep   ProductionStep       @relation(fields: [productionStepId], references: [id], onDelete: Cascade)
+
+  employeeId String
+
+  startedAt DateTime?
+
+  finishedAt DateTime?
+
+  workedMinutes Int?
+
+  status ProductionStepStatus @default(BEKLIYOR)
+
+  createdAt DateTime @default(now())
+
+  productionStep ProductionStep @relation(fields: [productionStepId], references: [id], onDelete: Cascade)
+
+  employee Employee @relation(fields: [employeeId], references: [id])
 
   @@unique([productionStepId, employeeId])
+
   @@index([productionStepId])
+
   @@index([employeeId])
+
+  @@index([status])
 }
 
 model Template {
-  id          String         @id @default(cuid())
-  name        String
+  id String @id @default(cuid())
+
+  name String
+
   description String?
-  isActive    Boolean        @default(true)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  steps       TemplateStep[]
+
+  isDefault Boolean @default(false)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  steps TemplateStep[]
+
+  jobs Job[]
 
   @@index([name])
+
+  @@index([isDefault])
+
   @@index([isActive])
 }
 
 model TemplateStep {
-  id                String   @id @default(cuid())
-  templateId        String
-  stationId         String
-  stepOrder         Int
-  estimatedMinutes  Int      @default(0)
-  requirePhotoCount Int      @default(0)
-  requireFile       Boolean  @default(false)
-  requireNote       Boolean  @default(false)
-  station           Station  @relation(fields: [stationId], references: [id])
-  template          Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  templateId String
+
+  stationId String
+
+  stepOrder Int
+
+  enabled Boolean @default(true)
+
+  estimatedMinutes Int @default(0)
+
+  requirePhotoCount Int @default(0)
+
+  requireFile Boolean @default(false)
+
+  requireNote Boolean @default(false)
+
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  station Station @relation(fields: [stationId], references: [id])
 
   @@unique([templateId, stepOrder])
+
   @@index([templateId])
+
   @@index([stationId])
+
+  @@index([stepOrder])
 }
 
 model JobFile {
-  id           String       @id @default(cuid())
-  jobId        String
-  category     FileCategory @default(DIGER)
+  id String @id @default(cuid())
+
+  jobId String
+
+  category FileCategory @default(DIGER)
+
   originalName String
-  fileName     String
-  filePath     String
-  fileType     String
-  fileSize     Int
-  uploadedAt   DateTime     @default(now())
-  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  fileName String
+
+  filePath String
+
+  fileType String
+
+  fileSize Int
+
+  uploadedAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
+
   @@index([category])
 }
 
 model JobPhoto {
-  id               String          @id @default(cuid())
-  jobId            String
-  productionStepId String?
-  employeeId       String?
-  originalName     String
-  fileName         String
-  filePath         String
-  fileSize         Int
-  fileType         String
-  uploadedAt       DateTime        @default(now())
+  id String @id @default(cuid())
 
-  employee         Employee?       @relation(fields: [employeeId], references: [id])
-  job              Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  productionStep   ProductionStep? @relation(fields: [productionStepId], references: [id], onDelete: SetNull)
+  jobId String
+
+  productionStepId String?
+
+  employeeId String?
+
+  originalName String
+
+  fileName String
+
+  filePath String
+
+  fileType String
+
+  fileSize Int
+
+  uploadedAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  productionStep ProductionStep? @relation(fields: [productionStepId], references: [id], onDelete: SetNull)
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
 
   @@index([jobId])
-  @@index([employeeId])
+
   @@index([productionStepId])
+
+  @@index([employeeId])
 }
 
 model JobNote {
-  id         String    @id @default(cuid())
-  jobId      String
+  id String @id @default(cuid())
+
+  jobId String
+
   employeeId String?
-  note       String
-  createdAt  DateTime  @default(now())
-  employee   Employee? @relation(fields: [employeeId], references: [id])
-  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  note String
+
+  createdAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
 
   @@index([jobId])
+
   @@index([employeeId])
 }
 
 model JobHistory {
-  id          String    @id @default(cuid())
-  jobId       String
-  employeeId  String?
-  action      String
+  id String @id @default(cuid())
+
+  jobId String
+
+  employeeId String?
+
+  action String
+
   description String?
-  createdAt   DateTime  @default(now())
-  employee    Employee? @relation(fields: [employeeId], references: [id])
-  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  oldValue String?
+
+  newValue String?
+
+  createdAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
 
   @@index([jobId])
+
   @@index([employeeId])
+
+  @@index([action])
 }
 
 enum JobStatus {

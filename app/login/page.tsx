@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+console.log("LOGIN PAGE RENDER");
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

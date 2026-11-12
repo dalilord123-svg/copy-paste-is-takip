@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -16,9 +17,7 @@ export async function PATCH(
 
     const result = await prisma.$transaction(async (tx) => {
       const job = await tx.job.findUnique({
-        where: {
-          id,
-        },
+        where: { id },
       });
 
       if (!job) {
@@ -26,12 +25,8 @@ export async function PATCH(
       }
 
       await tx.job.update({
-        where: {
-          id,
-        },
-        data: {
-          isArchived: true,
-        },
+        where: { id },
+        data: { isArchived: true },
       });
 
       await tx.jobHistory.create({
@@ -43,16 +38,18 @@ export async function PATCH(
       });
 
       const archivedJob = await tx.job.findUnique({
-        where: {
-          id,
-        },
+        where: { id },
         include: {
           customer: true,
 
           productionSteps: {
             include: {
               station: true,
-              employee: true,
+              assignments: {
+                include: {
+                  employee: true,
+                },
+              },
             },
             orderBy: {
               stepOrder: "asc",
@@ -107,9 +104,7 @@ export async function PATCH(
         message: "İş başarıyla arşivlendi.",
         data: result,
       },
-      {
-        status: 200,
-      }
+      { status: 200 }
     );
   } catch (error) {
     console.error("ARCHIVE JOB ERROR:", error);
@@ -121,9 +116,7 @@ export async function PATCH(
             success: false,
             error: "İş bulunamadı.",
           },
-          {
-            status: 404,
-          }
+          { status: 404 }
         );
       }
 
@@ -133,9 +126,7 @@ export async function PATCH(
             success: false,
             error: "İş arşivlenemedi.",
           },
-          {
-            status: 500,
-          }
+          { status: 500 }
         );
       }
 
@@ -144,9 +135,7 @@ export async function PATCH(
           success: false,
           error: error.message,
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
@@ -155,9 +144,7 @@ export async function PATCH(
         success: false,
         error: "Beklenmeyen bir hata oluştu.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

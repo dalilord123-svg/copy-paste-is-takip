@@ -1,15 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, EmployeeRole } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function seedStations() {
-  console.log("");
-  console.log("====================================");
-  console.log("COPY PASTE İŞ TAKİP");
-  console.log("Station Seed Başlıyor...");
-  console.log("====================================");
-  console.log("");
-
   const stations = [
     {
       name: "Grafik",
@@ -19,6 +13,8 @@ async function seedStations() {
       requirePhotoCount: 0,
       requireFile: true,
       requireNote: false,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 60,
     },
     {
       name: "Baskı",
@@ -28,6 +24,8 @@ async function seedStations() {
       requirePhotoCount: 0,
       requireFile: false,
       requireNote: false,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 60,
     },
     {
       name: "CNC",
@@ -37,15 +35,19 @@ async function seedStations() {
       requirePhotoCount: 0,
       requireFile: false,
       requireNote: false,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 60,
     },
     {
       name: "Elektrik",
       icon: "⚡",
-      color: "#FACC15",
+      color: "#EAB308",
       sortOrder: 4,
       requirePhotoCount: 0,
       requireFile: false,
       requireNote: false,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 60,
     },
     {
       name: "Kaynak",
@@ -55,6 +57,8 @@ async function seedStations() {
       requirePhotoCount: 0,
       requireFile: false,
       requireNote: false,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 60,
     },
     {
       name: "Boya",
@@ -64,6 +68,8 @@ async function seedStations() {
       requirePhotoCount: 0,
       requireFile: false,
       requireNote: false,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 60,
     },
     {
       name: "Montaj",
@@ -73,6 +79,8 @@ async function seedStations() {
       requirePhotoCount: 2,
       requireFile: false,
       requireNote: true,
+      allowMultipleEmployees: true,
+      estimatedMinutes: 120,
     },
     {
       name: "Kalite Kontrol",
@@ -82,6 +90,8 @@ async function seedStations() {
       requirePhotoCount: 1,
       requireFile: false,
       requireNote: true,
+      allowMultipleEmployees: false,
+      estimatedMinutes: 30,
     },
     {
       name: "Teslim",
@@ -91,6 +101,8 @@ async function seedStations() {
       requirePhotoCount: 0,
       requireFile: false,
       requireNote: false,
+      allowMultipleEmployees: false,
+      estimatedMinutes: 15,
     },
   ];
 
@@ -99,45 +111,52 @@ async function seedStations() {
       where: {
         name: station.name,
       },
-
-      update: {
-        icon: station.icon,
-        color: station.color,
-        sortOrder: station.sortOrder,
-        requirePhotoCount: station.requirePhotoCount,
-        requireFile: station.requireFile,
-        requireNote: station.requireNote,
-        isActive: true,
-      },
-
-      create: {
-        name: station.name,
-        icon: station.icon,
-        color: station.color,
-        sortOrder: station.sortOrder,
-        requirePhotoCount: station.requirePhotoCount,
-        requireFile: station.requireFile,
-        requireNote: station.requireNote,
-        isActive: true,
-      },
+      update: station,
+      create: station,
     });
 
-    console.log(`✔ ${station.name}`);
+    console.log("✔", station.name);
   }
+}
 
-  console.log("");
-  console.log("====================================");
-  console.log("Station Seed Tamamlandı");
-  console.log("====================================");
+async function seedAdmin() {
+  const password = await bcrypt.hash("123456", 10);
+
+  await prisma.employee.upsert({
+    where: {
+      username: "admin",
+    },
+    update: {},
+    create: {
+      name: "Administrator",
+      username: "admin",
+      password,
+      role: EmployeeRole.ADMIN,
+      isActive: true,
+    },
+  });
+
+  console.log("✔ Admin oluşturuldu");
 }
 
 async function main() {
+  console.log("====================================");
+  console.log("COPY PASTE İŞ TAKİP");
+  console.log("Seed Başlıyor");
+  console.log("====================================");
+
   await seedStations();
+  await seedAdmin();
+
+  console.log("");
+  console.log("====================================");
+  console.log("Seed Tamamlandı");
+  console.log("====================================");
 }
 
 main()
-  .catch((error) => {
-    console.error(error);
+  .catch((e) => {
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {

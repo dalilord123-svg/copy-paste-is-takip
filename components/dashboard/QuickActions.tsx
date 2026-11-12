@@ -8,6 +8,7 @@ import {
   Settings,
   BarChart3,
   Camera,
+  LayoutTemplate,
 } from "lucide-react";
 
 const actions = [
@@ -34,6 +35,12 @@ const actions = [
     href: "/stations",
     icon: Factory,
     color: "bg-orange-500",
+  },
+  {
+    title: "Şablonlar",
+    href: "/templates",
+    icon: LayoutTemplate,
+    color: "bg-emerald-600",
   },
   {
     title: "İş Listesi",
@@ -64,9 +71,7 @@ const actions = [
 export default function QuickActions() {
   return (
     <div className="bg-white rounded-2xl shadow p-6">
-
       <div className="flex items-center justify-between mb-6">
-
         <h2 className="text-2xl font-bold">
           Hızlı İşlemler
         </h2>
@@ -74,13 +79,10 @@ export default function QuickActions() {
         <span className="text-sm text-gray-500">
           Tek tıkla işlem yap
         </span>
-
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-5">
         {actions.map((action) => {
-
           const Icon = action.icon;
 
           return (
@@ -105,14 +107,10 @@ export default function QuickActions() {
               <span className="font-semibold text-center">
                 {action.title}
               </span>
-
             </Link>
           );
-
         })}
-
       </div>
-
     </div>
   );
 }

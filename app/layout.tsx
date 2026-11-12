@@ -1,22 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
 import RegisterSW from "@/app/components/RegisterSW";
 import InstallPWA from "@/app/components/InstallPWA";
-import SplashScreen from "@/app/components/SplashScreen";
 
 export const metadata: Metadata = {
   title: "COPY PASTE İş Takip",
-
-  description: "COPY PASTE Reklam Factory",
-
+  description: "COPY PASTE Reklam Factory İş Takip Sistemi",
   manifest: "/manifest.json",
 
   icons: {
     icon: "/icons/favicon.ico",
     apple: "/icons/apple-touch-icon.png",
   },
+};
 
-  themeColor: "#111111",
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0066ff",
 };
 
 export default function RootLayout({
@@ -27,7 +29,6 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body>
-         <SplashScreen />
         <RegisterSW />
         <InstallPWA />
         {children}
