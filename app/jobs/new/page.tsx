@@ -16,502 +16,909 @@ type Employee = {
 type Station = {
   id: string;
   name: string;
-};
-
-type TemplateStep = {
-  id: string;
-  stepOrder: number;
-  estimatedMinutes: number;
-  requirePhotoCount: number;
-  requireFile: boolean;
-  requireNote: boolean;
-  station: Station;
+  color?: string | null;
 };
 
 type Template = {
   id: string;
   name: string;
-  steps: TemplateStep[];
+
+  steps: {
+    id: string;
+
+    station: {
+      id: string;
+      name: string;
+    };
+
+    stepOrder: number;
+
+    enabled: boolean;
+
+    estimatedMinutes: number;
+
+    requirePhotoCount: number;
+
+    requireFile: boolean;
+
+    requireNote: boolean;
+  }[];
 };
 
-type JobStep = {
+type Step = {
   stationId: string;
+
   stationName: string;
-  employeeIds: string[];
+
   enabled: boolean;
+
   stepOrder: number;
+
+  employeeIds: string[];
+
   estimatedMinutes: number;
+
   requirePhotoCount: number;
+
   requireFile: boolean;
+
   requireNote: boolean;
 };
 
 export default function NewJobPage() {
-  const router = useRouter();
+    const router = useRouter();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
+  //-----------------------------------
+  // Form
+  //-----------------------------------
 
   const [customerId, setCustomerId] = useState("");
-  const [templateId, setTemplateId] = useState("");
-  const [leaderId, setLeaderId] = useState("");
-  const [title, setTitle] = useState("");
-  const [deliveryDate, setDeliveryDate] = useState("");
-  const [priority, setPriority] = useState("NORMAL");
 
-  const [steps, setSteps] = useState<JobStep[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [title, setTitle] = useState("");
+
+  const [description, setDescription] = useState("");
+
+  const [priority, setPriority] =
+    useState("NORMAL");
+
+  const [deliveryDate, setDeliveryDate] =
+    useState("");
+
+  const [templateId, setTemplateId] =
+    useState("");
+
+  //-----------------------------------
+  // Collections
+  //-----------------------------------
+
+  const [customers, setCustomers] =
+    useState<Customer[]>([]);
+
+  const [employees, setEmployees] =
+    useState<Employee[]>([]);
+
+  const [stations, setStations] =
+    useState<Station[]>([]);
+
+  const [templates, setTemplates] =
+    useState<Template[]>([]);
+
+  //-----------------------------------
+  // Production Flow
+  //-----------------------------------
+
+  const [steps, setSteps] =
+    useState<Step[]>([]);
+
+  //-----------------------------------
+  // UI
+  //-----------------------------------
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  //-----------------------------------
+  // Search
+  //-----------------------------------
+
+  const [stationSearch, setStationSearch] =
+    useState("");
+
+  //-----------------------------------
+  // Selected Template
+  //-----------------------------------
+
+  const selectedTemplate =
+    templates.find(
+      (x) => x.id === templateId
+    ) ?? null;
+      //--------------------------------------------------
+  // İlk Yükleme
+  //--------------------------------------------------
 
   useEffect(() => {
-    let cancelled = false;
+    loadData();
+  }, []);
 
-    async function loadList<T>(
-      url: string,
-      key: string,
-      label: string
-    ): Promise<T[]> {
-      const response = await fetch(url, {
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error(`${label}: HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (Array.isArray(result)) return result;
-      if (Array.isArray(result?.[key])) return result[key];
-      if (Array.isArray(result?.data)) return result.data;
-      if (Array.isArray(result?.data?.[key])) return result.data[key];
-
-      throw new Error(`${label}: Liste formatı hatalı.`);
-    }
-
-    async function loadData() {
+  async function loadData() {
+    try {
       setLoading(true);
       setError("");
 
-      try {
-        const [customersData, employeesData, templatesData] =
-          await Promise.all([
-            loadList<Customer>("/api/customers", "customers", "Müşteriler"),
-            loadList<Employee>("/api/employees", "employees", "Personeller"),
-            loadList<Template>("/api/templates", "templates", "Şablonlar"),
-          ]);
+      const [
+        customersRes,
+        employeesRes,
+        stationsRes,
+        templatesRes,
+      ] = await Promise.all([
+        fetch("/api/customers"),
+        fetch("/api/employees"),
+        fetch("/api/stations"),
+        fetch("/api/templates"),
+      ]);
 
-        if (cancelled) return;
-
-        setCustomers(customersData);
-        setEmployees(employeesData);
-        setTemplates(
-          templatesData.map((template) => ({
-            ...template,
-            steps: [...template.steps].sort(
-              (a, b) => a.stepOrder - b.stepOrder
-            ),
-          }))
-        );
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setError("Veriler yüklenemedi.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (
+        !customersRes.ok ||
+        !employeesRes.ok ||
+        !stationsRes.ok ||
+        !templatesRes.ok
+      ) {
+        throw new Error("Veriler yüklenemedi.");
       }
+
+      const customersData = await customersRes.json();
+const employeesData = await employeesRes.json();
+const stationsData = await stationsRes.json();
+const templatesData = await templatesRes.json();
+
+setCustomers(customersData.customers ?? customersData);
+
+setEmployees(employeesData.employees ?? employeesData);
+
+setStations(stationsData.stations ?? stationsData);
+
+setTemplates(templatesData.templates ?? templatesData);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Bir hata oluştu.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    loadData();
+  //--------------------------------------------------
+  // Template Değişince Üretim Akışı Oluştur
+  //--------------------------------------------------
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function selectTemplate(id: string) {
-    setTemplateId(id);
-
-    const template = templates.find((t) => t.id === id);
-
-    if (!template) {
+  useEffect(() => {
+    if (!selectedTemplate) {
       setSteps([]);
       return;
     }
 
-    const sorted = [...template.steps].sort(
-      (a, b) => a.stepOrder - b.stepOrder
+    const templateSteps = [...selectedTemplate.steps]
+      .sort((a, b) => a.stepOrder - b.stepOrder)
+      .map((step) => ({
+        stationId: step.station.id,
+
+        stationName: step.station.name,
+
+        enabled: step.enabled,
+
+        stepOrder: step.stepOrder,
+
+        employeeIds: [],
+
+        estimatedMinutes:
+          step.estimatedMinutes,
+
+        requirePhotoCount:
+          step.requirePhotoCount,
+
+        requireFile:
+          step.requireFile,
+
+        requireNote:
+          step.requireNote,
+      }));
+
+    setSteps(templateSteps);
+  }, [selectedTemplate]);
+
+  //--------------------------------------------------
+  // Loading
+  //--------------------------------------------------
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-7xl p-8">
+        <div className="rounded-xl border p-8 text-center">
+          Yükleniyor...
+        </div>
+      </main>
     );
+  }
+    //--------------------------------------------------
+  // Step Güncelle
+  //--------------------------------------------------
+
+  function updateStep(
+    index: number,
+    field: keyof Step,
+    value: any
+  ) {
+    setSteps((prev) =>
+      prev.map((step, i) =>
+        i === index
+          ? {
+              ...step,
+              [field]: value,
+            }
+          : step
+      )
+    );
+  }
+
+  //--------------------------------------------------
+  // Personel Seç
+  //--------------------------------------------------
+
+  function toggleEmployee(
+    stepIndex: number,
+    employeeId: string
+  ) {
+    setSteps((prev) =>
+      prev.map((step, index) => {
+        if (index !== stepIndex) return step;
+
+        const exists =
+          step.employeeIds.includes(employeeId);
+
+        return {
+          ...step,
+          employeeIds: exists
+            ? step.employeeIds.filter(
+                (x) => x !== employeeId
+              )
+            : [...step.employeeIds, employeeId],
+        };
+      })
+    );
+  }
+
+  //--------------------------------------------------
+  // İstasyon Sil
+  //--------------------------------------------------
+
+  function removeStep(index: number) {
+    setSteps((prev) =>
+      prev
+        .filter((_, i) => i !== index)
+        .map((step, i) => ({
+          ...step,
+          stepOrder: i + 1,
+        }))
+    );
+  }
+
+  //--------------------------------------------------
+  // Yukarı Taşı
+  //--------------------------------------------------
+
+  function moveUp(index: number) {
+    if (index === 0) return;
+
+    const list = [...steps];
+
+    [list[index - 1], list[index]] = [
+      list[index],
+      list[index - 1],
+    ];
 
     setSteps(
-      sorted.map((step) => ({
-        stationId: step.station.id,
-        stationName: step.station.name,
-        employeeIds: [],
-        enabled: true,
-        stepOrder: step.stepOrder,
-        estimatedMinutes: step.estimatedMinutes,
-        requirePhotoCount: step.requirePhotoCount,
-        requireFile: step.requireFile,
-        requireNote: step.requireNote,
+      list.map((step, i) => ({
+        ...step,
+        stepOrder: i + 1,
       }))
     );
   }
 
-  function updateStep(index: number, data: Partial<JobStep>) {
-    setSteps((prev) =>
-      prev.map((step, i) => (i === index ? { ...step, ...data } : step))
+  //--------------------------------------------------
+  // Aşağı Taşı
+  //--------------------------------------------------
+
+  function moveDown(index: number) {
+    if (index >= steps.length - 1) return;
+
+    const list = [...steps];
+
+    [list[index], list[index + 1]] = [
+      list[index + 1],
+      list[index],
+    ];
+
+    setSteps(
+      list.map((step, i) => ({
+        ...step,
+        stepOrder: i + 1,
+      }))
     );
   }
 
+  //--------------------------------------------------
+  // Yeni İstasyon Ekle
+  //--------------------------------------------------
+
+  function addStation(stationId: string) {
+    const station =
+      stations.find((x) => x.id === stationId);
+
+    if (!station) return;
+
+    const exists =
+      steps.some(
+        (x) => x.stationId === station.id
+      );
+
+    if (exists) {
+      alert("Bu istasyon zaten ekli.");
+      return;
+    }
+
+    setSteps((prev) => [
+      ...prev,
+      {
+        stationId: station.id,
+
+        stationName: station.name,
+
+        enabled: true,
+
+        stepOrder: prev.length + 1,
+
+        employeeIds: [],
+
+        estimatedMinutes: 60,
+
+        requirePhotoCount: 0,
+
+        requireFile: false,
+
+        requireNote: false,
+      },
+    ]);
+
+    setStationSearch("");
+  }
+    //--------------------------------------------------
+  // Kaydet
+  //--------------------------------------------------
+
   async function save() {
-    if (!customerId) {
-      alert("Lütfen müşteri seçiniz.");
-      return;
-    }
-
-    if (!title.trim()) {
-      alert("Lütfen iş adı giriniz.");
-      return;
-    }
-
-    const enabledSteps = steps
-      .filter((step) => step.enabled)
-      .sort((a, b) => a.stepOrder - b.stepOrder);
-
-    if (enabledSteps.length === 0) {
-      alert("En az bir üretim istasyonu seçmelisiniz.");
-      return;
-    }
-
-    setSaving(true);
-
     try {
+      setSaving(true);
+      setError("");
+
+      if (!customerId) {
+        throw new Error("Müşteri seçiniz.");
+      }
+
+      if (!title.trim()) {
+        throw new Error("İş adı giriniz.");
+      }
+
+      if (!templateId) {
+        throw new Error("Şablon seçiniz.");
+      }
+
+      if (steps.length === 0) {
+        throw new Error("Üretim akışı boş.");
+      }
+
       const response = await fetch("/api/jobs", {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify({
           customerId,
+
           title,
-          description: "",
-          templateId,
-          leaderId,
+
+          description,
+
           priority,
+
           deliveryDate,
-          steps: enabledSteps.map((step) => ({
-  stationId: step.stationId,
-  employeeIds: step.employeeIds,
-  enabled: step.enabled,
-  stepOrder: step.stepOrder,
-  estimatedMinutes: step.estimatedMinutes,
-  requirePhotoCount: step.requirePhotoCount,
-  requireFile: step.requireFile,
-  requireNote: step.requireNote,
-          })),
+
+          templateId,
+
+          steps,
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const error = await response.json().catch(() => null);
-        throw new Error(error?.error || "İş oluşturulamadı.");
+        throw new Error(
+          result.error ??
+            "İş oluşturulamadı."
+        );
       }
 
-      const job = await response.json();
+      router.push(`/jobs/${result.id}`);
 
-      router.push(`/jobs/${job.id}`);
       router.refresh();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "İş oluşturulamadı.");
+
+      setError(
+        err.message ??
+          "Bir hata oluştu."
+      );
     } finally {
       setSaving(false);
     }
   }
-
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-6xl p-8">
-        <p>Veriler yükleniyor...</p>
-      </main>
-    );
-  }
+    //--------------------------------------------------
+  // UI
+  //--------------------------------------------------
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <h1 className="text-3xl font-bold">Yeni İş</h1>
+    <main className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
 
-        <button
-          type="button"
-          onClick={() => router.push("/jobs")}
-          className="rounded-lg border px-5 py-3"
-        >
-          ← İşlere Dön
-        </button>
+      <div className="flex items-center justify-between">
+
+        <div>
+
+          <h1 className="text-3xl font-bold">
+            Yeni İş Oluştur
+          </h1>
+
+          <p className="mt-2 text-gray-500">
+            Müşteri seçin, üretim akışını oluşturun ve işi kaydedin.
+          </p>
+
+        </div>
+
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">
+
           {error}
+
         </div>
+
       )}
 
-      <section className="grid grid-cols-1 gap-4 rounded-xl border p-5 md:grid-cols-2 bg-white">
-        <div>
-          <label className="mb-2 block text-sm font-medium">Müşteri</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="w-full rounded-lg border p-3"
-          >
-            <option value="">Müşteri Seç</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.company}
+      <div className="rounded-xl border bg-white p-6">
+
+        <h2 className="mb-6 text-xl font-bold">
+          İş Bilgileri
+        </h2>
+
+        <div className="grid gap-5 md:grid-cols-2">
+
+          <div>
+
+            <label className="mb-2 block text-sm font-medium">
+              Müşteri
+            </label>
+
+            <select
+              value={customerId}
+              onChange={(e) =>
+                setCustomerId(e.target.value)
+              }
+              className="w-full rounded-lg border p-3"
+            >
+
+              <option value="">
+                Müşteri Seçiniz
               </option>
-            ))}
-          </select>
+
+              {customers.map((customer) => (
+
+                <option
+                  key={customer.id}
+                  value={customer.id}
+                >
+                  {customer.company}
+                </option>
+
+              ))}
+
+            </select>
+
+          </div>
+
+          <div>
+
+            <label className="mb-2 block text-sm font-medium">
+              İş Adı
+            </label>
+
+            <input
+              type="text"
+              value={title}
+              onChange={(e) =>
+                setTitle(e.target.value)
+              }
+              className="w-full rounded-lg border p-3"
+              placeholder="Örn: Kutu Harf Tabela"
+            />
+
+          </div>
+
+          <div className="md:col-span-2">
+
+            <label className="mb-2 block text-sm font-medium">
+              Açıklama
+            </label>
+
+            <textarea
+              rows={4}
+              value={description}
+              onChange={(e) =>
+                setDescription(e.target.value)
+              }
+              className="w-full rounded-lg border p-3"
+              placeholder="İş açıklaması..."
+            />
+
+          </div>
+
+          <div>
+
+            <label className="mb-2 block text-sm font-medium">
+              Öncelik
+            </label>
+
+            <select
+              value={priority}
+              onChange={(e) =>
+                setPriority(e.target.value)
+              }
+              className="w-full rounded-lg border p-3"
+            >
+
+              <option value="DUSUK">
+                Düşük
+              </option>
+
+              <option value="NORMAL">
+                Normal
+              </option>
+
+              <option value="YUKSEK">
+                Yüksek
+              </option>
+
+              <option value="ACIL">
+                Acil
+              </option>
+
+            </select>
+
+          </div>
+
+          <div>
+
+            <label className="mb-2 block text-sm font-medium">
+              Teslim Tarihi
+            </label>
+
+            <input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) =>
+                setDeliveryDate(e.target.value)
+              }
+              className="w-full rounded-lg border p-3"
+            />
+
+          </div>
+
+          <div className="md:col-span-2">
+
+            <label className="mb-2 block text-sm font-medium">
+              Şablon
+            </label>
+
+            <select
+              value={templateId}
+              onChange={(e) =>
+                setTemplateId(e.target.value)
+              }
+              className="w-full rounded-lg border p-3"
+            >
+
+              <option value="">
+                Şablon Seçiniz
+              </option>
+
+              {templates.map((template) => (
+
+                <option
+                  key={template.id}
+                  value={template.id}
+                >
+                  {template.name}
+                </option>
+
+              ))}
+
+            </select>
+
+          </div>
+
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium">İş Adı</label>
+      </div>
+
+      <div className="rounded-xl border bg-white p-6">
+
+        <h2 className="mb-6 text-xl font-bold">
+          Üretim Akışı
+        </h2>
+                <div className="mb-6">
+
           <input
             type="text"
-            placeholder="İş adını girin"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border p-3"
+            placeholder="İstasyon ara..."
+            value={stationSearch}
+            onChange={(e) =>
+              setStationSearch(e.target.value)
+            }
+            className="mb-4 w-full rounded-lg border p-3"
           />
-        </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium">
-            Üretim Şablonu
-          </label>
-          <select
-            value={templateId}
-            onChange={(e) => selectTemplate(e.target.value)}
-            className="w-full rounded-lg border p-3"
-          >
-            <option value="">Şablon Seç</option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="flex flex-wrap gap-2">
 
-        <div>
-          <label className="mb-2 block text-sm font-medium">
-            Genel Ustabaşı
-          </label>
-          <select
-            value={leaderId}
-            onChange={(e) => setLeaderId(e.target.value)}
-            className="w-full rounded-lg border p-3"
-          >
-            <option value="">Genel Ustabaşı Seç</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
-              </option>
-            ))}
-          </select>
+            {stations
+              .filter((station) =>
+                station.name
+                  .toLowerCase()
+                  .includes(
+                    stationSearch.toLowerCase()
+                  )
+              )
+              .map((station) => (
+                <button
+                  key={station.id}
+                  type="button"
+                  onClick={() =>
+                    addStation(station.id)
+                  }
+                  className="rounded-lg border px-4 py-2 hover:bg-gray-100"
+                >
+                  + {station.name}
+                </button>
+              ))}
 
-          <p className="mt-1 text-xs text-gray-500">
-            Seçilen ustabaşı bütün üretim kademelerinden sorumludur.
-          </p>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium">Teslim Tarihi</label>
-          <input
-            type="date"
-            value={deliveryDate}
-            onChange={(e) => setDeliveryDate(e.target.value)}
-            className="w-full rounded-lg border p-3"
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium">Öncelik</label>
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            className="w-full rounded-lg border p-3"
-          >
-            <option value="DUSUK">Düşük</option>
-            <option value="NORMAL">Normal</option>
-            <option value="YUKSEK">Yüksek</option>
-            <option value="ACIL">Acil</option>
-          </select>
-        </div>
-      </section>
-
-      <section className="space-y-5">
-        <h2 className="text-2xl font-bold">Üretim Akışı ve Personel Atama</h2>
-
-        {steps.length === 0 && (
-          <div className="rounded-xl border p-5 text-gray-500 bg-white">
-            Üretim adımlarını görmek için bir şablon seçin.
           </div>
-        )}
 
-        {steps.map((step, index) => (
-          <div
-            key={`${step.stationId}-${index}`}
-            className="space-y-4 rounded-xl border p-5 bg-white"
-          >
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold">
-                {index + 1}. {step.stationName}
-              </h3>
+        </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setSteps(steps.filter((_, i) => i !== index))
-                }
-                className="text-red-600 hover:text-red-800"
-              >
-                Kaldır
-              </button>
-            </div>
+        <div className="space-y-6">
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div>
-                <label className="text-sm">Sıra</label>
-                <input
-                  type="number"
-                  value={step.stepOrder}
-                  onChange={(e) =>
-                    updateStep(index, {
-                      stepOrder: Number(e.target.value),
-                    })
-                  }
-                  className="w-full border rounded-lg p-2"
-                />
+          {steps.map((step, index) => (
+
+            <div
+              key={index}
+              className="rounded-xl border p-5"
+            >
+
+              <div className="mb-4 flex items-center justify-between">
+
+                <div>
+
+                  <div className="text-lg font-bold">
+
+                    {step.stepOrder}. {step.stationName}
+
+                  </div>
+
+                </div>
+
+                <div className="flex gap-2">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      moveUp(index)
+                    }
+                    className="rounded border px-3 py-1"
+                  >
+                    ↑
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      moveDown(index)
+                    }
+                    className="rounded border px-3 py-1"
+                  >
+                    ↓
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeStep(index)
+                    }
+                    className="rounded border border-red-300 px-3 py-1 text-red-600"
+                  >
+                    Sil
+                  </button>
+
+                </div>
+
               </div>
 
-              <div>
-                <label className="text-sm">Süre</label>
-                <input
-                  type="number"
-                  value={step.estimatedMinutes}
-                  onChange={(e) =>
-                    updateStep(index, {
-                      estimatedMinutes: Number(e.target.value),
-                    })
-                  }
-                  className="w-full border rounded-lg p-2"
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+
+                <div>
+
+                  <label className="mb-2 block font-medium">
+                    Tahmini Süre (dk)
+                  </label>
+
+                  <input
+                    type="number"
+                    value={step.estimatedMinutes}
+                    onChange={(e) =>
+                      updateStep(
+                        index,
+                        "estimatedMinutes",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-full rounded-lg border p-3"
+                  />
+
+                </div>
+
+                <div>
+
+                  <label className="mb-2 block font-medium">
+                    Fotoğraf Zorunlu
+                  </label>
+
+                  <input
+                    type="number"
+                    value={step.requirePhotoCount}
+                    onChange={(e) =>
+                      updateStep(
+                        index,
+                        "requirePhotoCount",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-full rounded-lg border p-3"
+                  />
+
+                </div>
+
               </div>
 
-              <div>
-                <label className="text-sm">Fotoğraf</label>
-                <input
-                  type="number"
-                  value={step.requirePhotoCount}
-                  onChange={(e) =>
-                    updateStep(index, {
-                      requirePhotoCount: Number(e.target.value),
-                    })
-                  }
-                  className="w-full border rounded-lg p-2"
-                />
-              </div>
+              <div className="mt-5 flex gap-6">
 
-              <div className="flex items-end">
-                <label className="flex gap-2">
+                <label className="flex items-center gap-2">
+
                   <input
                     type="checkbox"
                     checked={step.requireFile}
                     onChange={(e) =>
-                      updateStep(index, {
-                        requireFile: e.target.checked,
-                      })
+                      updateStep(
+                        index,
+                        "requireFile",
+                        e.target.checked
+                      )
                     }
                   />
-                  Dosya
-                </label>
-              </div>
 
-              <div className="flex items-end">
-                <label className="flex gap-2">
+                  Dosya Zorunlu
+
+                </label>
+
+                <label className="flex items-center gap-2">
+
                   <input
                     type="checkbox"
                     checked={step.requireNote}
                     onChange={(e) =>
-                      updateStep(index, {
-                        requireNote: e.target.checked,
-                      })
+                      updateStep(
+                        index,
+                        "requireNote",
+                        e.target.checked
+                      )
                     }
                   />
-                  Not
+
+                  Not Zorunlu
+
                 </label>
+
               </div>
-            </div>
 
-            <div className="mt-5">
-              <label className="block text-sm font-medium mb-2">
-                Personeller
-              </label>
+              <div className="mt-6">
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {employees.map((employee) => {
-                  const checked = step.employeeIds.includes(employee.id);
+                <div className="mb-3 font-semibold">
 
-                  return (
-                    <label
+                  Personeller
+
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+
+                  {employees.map((employee) => (
+
+                    <button
                       key={employee.id}
-                      className="flex items-center gap-2 border rounded-lg p-3 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                      type="button"
+                      onClick={() =>
+                        toggleEmployee(
+                          index,
+                          employee.id
+                        )
+                      }
+                      className={`rounded-lg border px-3 py-2 ${
+                        step.employeeIds.includes(
+                          employee.id
+                        )
+                          ? "bg-blue-600 text-white"
+                          : "bg-white"
+                      }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            updateStep(index, {
-                              employeeIds: [
-                                ...step.employeeIds,
-                                employee.id,
-                              ],
-                            });
-                          } else {
-                            updateStep(index, {
-                              employeeIds: step.employeeIds.filter(
-                                (id) => id !== employee.id
-                              ),
-                            });
-                          }
-                        }}
-                      />
-                      <span>{employee.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ))}
-      </section>
+                      {employee.name}
+                    </button>
 
-      <button
-        type="button"
-        onClick={save}
-        disabled={saving}
-        className="w-full rounded-xl bg-blue-600 px-8 py-4 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-      >
-        {saving ? "İş Oluşturuluyor..." : "İşi Oluştur"}
-      </button>
+                  ))}
+
+                </div>
+
+              </div>
+
+            </div>
+
+          ))}
+
+        </div>
+              </div>
+
+      <div className="flex justify-end gap-4">
+
+        <button
+          type="button"
+          onClick={() => router.push("/jobs")}
+          className="rounded-lg border px-6 py-3 hover:bg-gray-100"
+        >
+          İptal
+        </button>
+
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? "Kaydediliyor..." : "İşi Oluştur"}
+        </button>
+
+      </div>
+
     </main>
   );
 }
